@@ -16,6 +16,7 @@ const BTN_CONDUCTOR := Vector2(95, 95)
 const BTN_SUN := Vector2(1035, 95)
 const BTN_RAIN := Vector2(1170, 95)
 const BTN_PARENT := Vector2(1240, 200)
+const BTN_ECHO := Vector2(95, 235)
 const BTN_R := 56.0
 
 enum Weather { NONE, SUN, RAIN }
@@ -62,6 +63,15 @@ var _btn_alpha := 1.0
 var _flashes: Array = [] ## [pos, age]
 var _shake := 0.0
 var hide_ui := false
+# Echo game ("sing it back")
+var _echo_listen := false
+var _mic_pos := Vector2.ZERO
+var _rec_len := 2.5
+var _echo_seq: Array = []
+var _echo_pos := 0
+var _echo_waiting := false
+var _echo_result := 0 ## 0 waiting, 1 done right, 2 needs a replay
+var _echo_idle := 0.0
 var season := Season.SUMMER
 var _auto_season := 1
 var _season_parts: Array = [] ## falling petals / leaves / snow: [pos, phase] ## key art: no buttons, no empty beds
@@ -110,7 +120,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	var p := get_global_mouse_position()
-	for btn in [BTN_CONDUCTOR, BTN_SUN, BTN_RAIN]:
+	for btn in [BTN_CONDUCTOR, BTN_SUN, BTN_RAIN, BTN_ECHO]:
 		if p.distance_to(btn) < BTN_R:
 			_presses[btn] = _t
 	Audio.play_music(_plop, randf_range(-2.0, 2.0) + _shift(), 2.0)
@@ -119,6 +129,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match state:
 		State.RECORDING, State.CONCERT:
+			return
+		State.ECHO:
+			_echo_tap(p)
 			return
 		State.NIGHT:
 			if p.distance_to(BTN_SUN) < BTN_R:
@@ -129,6 +142,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if p.distance_to(BTN_RAIN) < BTN_R:
 		_set_weather(Weather.NONE if weather == Weather.RAIN else Weather.RAIN)
+		return
+	if p.distance_to(BTN_ECHO) < BTN_R:
+		if _creature_count() >= 2:
+			_echo_game()
 		return
 	if p.distance_to(BTN_CONDUCTOR) < BTN_R:
 		if _creature_count() >= 3:
@@ -276,6 +293,132 @@ func _concert() -> void:
 	await get_tree().create_timer(0.8).timeout
 	if state == State.CONCERT:
 		state = State.DAY
+
+
+## Echo game: creatures sing a short phrase, the child sings it back (microphone)
+## or taps the singers in order (no microphone). There is no failing: a miss
+## simply replays the phrase. Three phrases, each a little longer.
+func _echo_game() -> void:
+	state = State.ECHO
+	var beat := 60.0 / _bpm()
+	var singers := beds.filter(func(c): return c != null)
+	for round_i in 3:
+		var length := mini(2 + round_i, 4)
+		_echo_seq.clear()
+		for k in length:
+			var pick = singers[randi() % singers.size()]
+			while singers.size() > 1 and not _echo_seq.is_empty() and pick == _echo_seq[-1]:
+				pick = singers[randi() % singers.size()]
+			_echo_seq.append(pick)
+		var tries := 0
+		while true:
+			await get_tree().create_timer(beat).timeout
+			if state != State.ECHO:
+				return
+			await _echo_play_phrase(beat)
+			if state != State.ECHO:
+				return
+			var ok := false
+			if settings.mic:
+				ok = await _echo_listen_voice()
+			else:
+				ok = await _echo_wait_taps()
+			if state != State.ECHO:
+				return
+			tries += 1
+			if ok or tries >= 3:
+				break
+		for c in singers:
+			if is_instance_valid(c):
+				c.cheer()
+				c.celebrate_hop(randf() * 0.1)
+		_mini_burst(_echo_seq[0].global_position + Vector2(0, -_echo_seq[0].height() - 40))
+		await get_tree().create_timer(beat * 2.0).timeout
+	_fireworks()
+	await get_tree().create_timer(beat * 3.0).timeout
+	if state == State.ECHO:
+		state = State.DAY
+
+
+func _echo_play_phrase(beat: float) -> void:
+	for c in _echo_seq:
+		if not is_instance_valid(c):
+			continue
+		c.highlight()
+		c.sing(_shift())
+		await get_tree().create_timer(beat).timeout
+
+
+## Microphone: listen while the first singer "holds the mic". Any answer counts.
+func _echo_listen_voice() -> bool:
+	var first = _echo_seq[0]
+	_mic_pos = first.global_position + Vector2(0, -first.height() - 70)
+	_rec_len = 1.6 + 0.6 * _echo_seq.size()
+	_rec_time = 0.0
+	_echo_listen = true
+	Audio.start_recording()
+	while _rec_time < _rec_len and state == State.ECHO:
+		await get_tree().process_frame
+		_rec_time += get_process_delta_time()
+	var raw := Audio.stop_recording()
+	_echo_listen = false
+	var res := SoundLab.analyze(raw, Audio.mix_rate())
+	if res.is_empty():
+		return false
+	# the first singer answers with the child's own voice
+	Audio.play(SoundLab.make_wav(res.samples, Audio.mix_rate()), res.freq, _shift())
+	if is_instance_valid(first):
+		first.cheer()
+	await get_tree().create_timer(minf(2.0, res.samples.size() / float(Audio.mix_rate()))).timeout
+	return true
+
+
+## No microphone: tap the singers in the same order.
+func _echo_wait_taps() -> bool:
+	_echo_pos = 0
+	_echo_result = 0
+	_echo_waiting = true
+	_echo_idle = 0.0
+	for c in _echo_seq:
+		if is_instance_valid(c):
+			c.invite()
+	while _echo_result == 0 and state == State.ECHO:
+		await get_tree().process_frame
+		_echo_idle += get_process_delta_time()
+		if _echo_idle > 15.0:
+			state = State.DAY # nobody is playing: quietly leave the game
+	_echo_waiting = false
+	return _echo_result == 1
+
+
+func _echo_tap(p: Vector2) -> void:
+	if not _echo_waiting:
+		return
+	for i in BED_POSITIONS.size():
+		var c = beds[i]
+		if c == null:
+			continue
+		var hit := Rect2(BED_POSITIONS[i] + Vector2(-c.radius() - 20, -c.height() - 20), Vector2(c.radius() * 2 + 40, c.height() + 50))
+		if not hit.has_point(p):
+			continue
+		_echo_idle = 0.0
+		c.cheer()
+		c.sing(_shift())
+		if c == _echo_seq[_echo_pos]:
+			_echo_pos += 1
+			if _echo_pos >= _echo_seq.size():
+				_echo_result = 1
+		else:
+			_echo_result = 2 # gently replay the phrase
+		return
+
+
+func _mini_burst(origin: Vector2) -> void:
+	var cols := [Color("ffc93c"), Color("ff8fb8"), Color("ffffff")]
+	for i in 16:
+		var a := TAU * i / 16.0
+		_confetti.append([origin, Vector2(cos(a), sin(a)) * 180.0, 0.0, cols[i % 3], 0.0, 8.0])
+	_flashes.append([origin, 0.0])
 
 
 func _fireworks() -> void:
@@ -482,8 +625,8 @@ func _process(delta: float) -> void:
 
 
 func _tick_ambience(delta: float) -> void:
-	Audio.set_rain(weather == Weather.RAIN and state != State.RECORDING)
-	if state == State.RECORDING:
+	Audio.set_rain(weather == Weather.RAIN and state != State.RECORDING and not _echo_listen)
+	if state == State.RECORDING or _echo_listen:
 		return
 	_amb_timer -= delta
 	if _amb_timer > 0.0:
@@ -501,7 +644,7 @@ func _tick_ambience(delta: float) -> void:
 ## Gentle accompaniment: bass on 1 and 3, music-box notes on the off-beats.
 ## Quiet while recording so the child can hear itself; silent at night.
 func _tick_music(delta: float) -> void:
-	if state == State.NIGHT or state == State.RECORDING or _creature_count() == 0:
+	if state == State.NIGHT or state == State.RECORDING or _echo_listen or _creature_count() == 0:
 		return
 	_beat_time += delta
 	var beat := 60.0 / _bpm()
@@ -748,6 +891,8 @@ func _draw_front() -> void:
 	_draw_sun_icon(BTN_SUN)
 	_draw_button(BTN_RAIN, Color("7fb6f0"), state == State.DAY, weather == Weather.RAIN)
 	_draw_cloud_icon(BTN_RAIN)
+	_draw_button(BTN_ECHO, Color("b58cf0"), (_creature_count() >= 2 and state == State.DAY) or state == State.ECHO, state == State.ECHO)
+	_draw_ear_icon(BTN_ECHO)
 	# parent button: small but clearly visible padlock
 	_front.draw_circle(BTN_PARENT + Vector2(0, 3), 24, Color(0, 0, 0, 0.15))
 	_front.draw_circle(BTN_PARENT, 24, Color("fbf6ee"))
@@ -869,8 +1014,8 @@ func _draw_overlay() -> void:
 			if size >= 12.0:
 				_overlay.draw_circle(cf[0] - v.normalized() * size * 0.3, size * 0.3, Color(1, 1, 1, 0.8 * al))
 	# Recording overlay
-	if state == State.RECORDING and _rec_bed >= 0:
-		var c: Vector2 = BED_POSITIONS[_rec_bed] + Vector2(0, -130 * BED_SCALE[_rec_bed])
+	if (state == State.RECORDING and _rec_bed >= 0) or _echo_listen:
+		var c: Vector2 = _mic_pos if _echo_listen else BED_POSITIONS[_rec_bed] + Vector2(0, -130 * BED_SCALE[_rec_bed])
 		var pulse := 1.0 + 0.08 * sin(_t * 8.0)
 		var lvl := Audio.level
 		for k in 3:
@@ -883,7 +1028,7 @@ func _draw_overlay() -> void:
 		_overlay.draw_circle(c + Vector2(0, 12), 14, Color.WHITE)
 		_overlay.draw_arc(c + Vector2(0, 2), 26, 0.1, PI - 0.1, 12, Color.WHITE, 6.0, true)
 		_overlay.draw_line(c + Vector2(0, 28), c + Vector2(0, 42), Color.WHITE, 6.0)
-		var prog := _rec_time / Audio.RECORD_SECONDS
+		var prog := _rec_time / (_rec_len if _echo_listen else Audio.RECORD_SECONDS)
 		_overlay.draw_arc(c, 68, -PI / 2, -PI / 2 + TAU * prog, 48, Color("ffd45c"), 9.0, true)
 
 
@@ -926,6 +1071,30 @@ func _draw_baton(c: Vector2) -> void:
 	var closed := pts.duplicate()
 	closed.append(pts[0])
 	_front.draw_polyline(closed, ink, 3.0, true)
+
+
+## "Sing it back": two speech bubbles, a note going out and one coming back.
+func _draw_ear_icon(c: Vector2) -> void:
+	c += _btn_offset
+	var ink := Color(0.17, 0.14, 0.27, _btn_alpha)
+	var white := Color(1, 1, 1, _btn_alpha)
+	for side in [-1, 1]:
+		var bc := c + Vector2(side * 13, side * -9)
+		var r := 17.0 if side < 0 else 14.0
+		var pts := PackedVector2Array()
+		for i in 24:
+			var a := TAU * i / 24.0
+			pts.append(bc + Vector2(cos(a) * r * 1.15, sin(a) * r))
+		_front.draw_colored_polygon(pts, white)
+		var tail := PackedVector2Array([bc + Vector2(side * -6, r - 3), bc + Vector2(side * -16, r + 9), bc + Vector2(side * 4, r - 2)])
+		_front.draw_colored_polygon(tail, white)
+		var closed := pts.duplicate()
+		closed.append(pts[0])
+		_front.draw_polyline(closed, ink, 3.0, true)
+		var nc := bc + Vector2(-3, 5) * (r / 17.0)
+		_front.draw_circle(nc, 4.5 * r / 17.0, ink)
+		_front.draw_line(nc + Vector2(4, 0) * r / 17.0, nc + Vector2(4, -14) * r / 17.0, ink, 3.0)
+		_front.draw_line(nc + Vector2(4, -14) * r / 17.0, nc + Vector2(10, -10) * r / 17.0, ink, 3.0)
 
 
 func _draw_sun_icon(c: Vector2) -> void:

@@ -32,6 +32,8 @@ var grow := 0.0
 var stage := 2.0 ## 0..1 sprout, 1..2 bud, then the full being grows in
 var joy := 0.0
 var beat_pulse := 0.0
+var glow := 0.0 ## highlight while singing a phrase in the echo game
+var _invite := 0.0
 var season := 1 ## 0 spring flower, 1 none, 2 leaf, 3 knit hat
 var yawn_amt := 0.0
 var bow_amt := 0.0
@@ -93,6 +95,17 @@ func sing(shift: float) -> void:
 	var top: float = -HEIGHTS[species] - 10.0
 	for i in 2:
 		_notes.append([Vector2(randf_range(-25, 25), top), Vector2(randf_range(-35, 35), -80), -i * 0.15, PALETTE[species]])
+
+
+func highlight() -> void:
+	var tw := create_tween()
+	tw.tween_property(self, "glow", 1.0, 0.1)
+	tw.tween_property(self, "glow", 0.0, 0.7)
+
+
+## Waiting for the child: a soft shimmer that says "tap me".
+func invite() -> void:
+	_invite = 4.0
 
 
 ## Gentle bop on the music's beat.
@@ -159,6 +172,7 @@ func _process(delta: float) -> void:
 		_blink = 1.0
 		_next_blink = randf_range(2.0, 5.0)
 	_blink = maxf(0.0, _blink - delta * 7.0)
+	_invite = maxf(0.0, _invite - delta)
 	for n in _notes:
 		n[2] += delta
 		if n[2] > 0.0:
@@ -250,6 +264,12 @@ func _draw() -> void:
 	var s := grow
 	if s <= 0.08:
 		return
+	var halo := maxf(glow, 0.7 * (0.5 + 0.5 * sin(_t * 5.0)) if _invite > 0.0 else 0.0)
+	if halo > 0.01:
+		var mid := Vector2(0, -HEIGHTS[species] * 0.5 * s)
+		for k in 3:
+			draw_circle(mid, (HEIGHTS[species] * 0.55 + k * 14) * s, Color(1, 0.95, 0.55, 0.22 * halo))
+		draw_arc(mid, (HEIGHTS[species] * 0.55 + 36) * s, 0, TAU, 48, Color(1, 1, 1, 0.8 * halo), 5.0, true)
 	# soft ground shadow
 	draw_colored_polygon(_ell_pts(Vector2(0, 4), Vector2(62 * s, 14 * s), 0.0, 24), Color(0.1, 0.05, 0.1, 0.22))
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.045 * (1.0 - _sleep_blend * 0.7)
@@ -446,23 +466,40 @@ func _draw_bell() -> void:
 		bell.append(b + Vector2(20, 10))
 		bell.append(b + Vector2(-20, 10))
 		_poly(bell, c.lightened(0.15))
-	# the big singing bell hangs from the top
+	# the big singing bell hangs from the top: dome, flaring sides, five curled tips
 	var top := Vector2(30, -206)
 	var hang := sin(_t * 1.5) * 0.08 + sing_amp * 0.25
 	var pts := PackedVector2Array()
-	for i in 17:
-		var a := PI * i / 16.0
-		pts.append(Vector2(-cos(a) * 46, -sin(a) * 30 + 40))
-	pts.append(Vector2(58, 104))
-	for i in range(1, 8):
-		var u := float(i) / 8.0
-		pts.append(Vector2(lerpf(58, -58, u), 104 + (8.0 if i % 2 == 1 else 0.0)))
-	pts.append(Vector2(-58, 104))
+	for i in 13:
+		var a := PI + PI * i / 12.0
+		pts.append(Vector2(cos(a) * 40, 34 + sin(a) * 30))
+	for i in 7:
+		var u := float(i) / 6.0
+		pts.append(Vector2(40 + 18 * u * u, 34 + 58 * u))
+	for tip in 5:
+		var x0 := lerpf(58, -58, float(tip) / 5.0)
+		var x1 := lerpf(58, -58, float(tip + 1) / 5.0)
+		var mx := (x0 + x1) / 2.0
+		pts.append(Vector2(lerpf(x0, mx, 0.5) + 4, 104))
+		pts.append(Vector2(mx, 116))
+		pts.append(Vector2(lerpf(mx, x1, 0.5) - 4, 104))
+		if tip < 4:
+			pts.append(Vector2(x1, 96))
+	for i in range(6, -1, -1):
+		var u := float(i) / 6.0
+		pts.append(Vector2(-40 - 18 * u * u, 34 + 58 * u))
 	for i in pts.size():
 		pts[i] = top + pts[i].rotated(hang)
 	_poly(pts, c)
-	_shade(top + Vector2(22, 70).rotated(hang), Vector2(16, 26), c)
-	_shine(top + Vector2(-24, 40).rotated(hang), Vector2(12, 7))
+	_shade(top + Vector2(22, 66).rotated(hang), Vector2(14, 28), c)
+	_shine(top + Vector2(-20, 30).rotated(hang), Vector2(10, 7))
+	# green calyx joins the bell to the stem
+	var calyx := PackedVector2Array()
+	for i in 10:
+		var a := PI + PI * i / 9.0
+		var r := 22.0 if i % 2 == 0 else 12.0
+		calyx.append(top + Vector2(cos(a) * r, 8 + sin(a) * r * 0.6).rotated(hang))
+	_poly(calyx, green)
 	_face(top + Vector2(0, 72).rotated(hang), 0.95)
 
 
