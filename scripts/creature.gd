@@ -49,6 +49,7 @@ var _hat_vel := 0.0
 var _prev_motion := 0.0
 var _idle_in := randf_range(4.0, 9.0)
 var _head := Vector2.ZERO ## top of the head in local space (after lean), for the thirst bubble
+var golden := false ## rare: a golden being with twinkling stars
 var thirst := 0.0 ## 0 fresh .. 1 very thirsty: droops and fades until watered
 var _thirst_shown := 0.0
 var _drops: Array = [] ## [pos, vel, age] water splash
@@ -362,6 +363,11 @@ func _draw() -> void:
 		_: _draw_sunflower()
 	_draw_accessory()
 	draw_set_transform(Vector2.ZERO)
+	if golden:
+		for k in 4:
+			var ang := _t * 0.8 + TAU * k / 4.0
+			var tw := 0.5 + 0.5 * sin(_t * 3.0 + k * 1.7)
+			_star(_head + Vector2(0, HEIGHTS[species] * 0.35 * s) + Vector2(cos(ang) * 70, sin(ang) * 24) * s, (6.0 + 4.0 * tw) * s, Color(1, 0.86, 0.3, 0.6 + 0.4 * tw))
 	if _sleep_blend > 0.5:
 		_draw_zzz()
 	elif droop > 0.3 and stage >= 2.0:
@@ -936,6 +942,14 @@ func _drop(c: Vector2, r: float, col: Color) -> void:
 
 
 ## Watered: splash, a happy hop and a little growth spurt.
+## A friend answered: little hearts and a happy hop.
+func love() -> void:
+	cheer()
+	celebrate_hop(0.0)
+	for i in 6:
+		_sparkles.append([Vector2(randf_range(-30, 30), -height() / scale.y * 0.8), Vector2(randf_range(-60, 60), randf_range(-160, -90)), 0.0, Color("ff7aa8")])
+
+
 func water() -> void:
 	thirst = 0.0
 	for i in 18:

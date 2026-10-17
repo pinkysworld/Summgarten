@@ -311,6 +311,9 @@ func _show_settings() -> void:
 		var path: String = exporter.call() if exporter.is_valid() else ""
 		exp_info.visible = true
 		exp_info.text = tr("NO_BEINGS") if path.is_empty() else tr("SAVED") % path)
+	_button(tr("POSTCARDS"), func():
+		DirAccess.make_dir_recursive_absolute("user://postcards")
+		OS.shell_open(ProjectSettings.globalize_path("user://postcards")))
 
 	# Language and season
 	_box = _card()

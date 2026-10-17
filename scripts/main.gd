@@ -106,6 +106,23 @@ const HELP_STEP := 4.0 ## seconds per bubble in the help tour
 var _help_all := 0.0 ## seconds left in the help tour (one bubble at a time)
 var _help_one := {} ## help key -> seconds left (a single bubble)
 var _help_font: Font
+const FRIENDS := {0: 3, 3: 0, 2: 5, 5: 2, 4: 8, 8: 4, 6: 7, 7: 6, 1: 0} ## species pairs that sing a duet
+const STONES := [Vector3(612, 470, 14), Vector3(640, 528, 17), Vector3(655, 590, 12), Vector3(905, 520, 16)]
+const MILL := Vector2(600, 233)
+const TREE_CROWN := Vector2(232, 270)
+const POND := Vector2(1195, 452)
+var _hold_t := -1.0 ## finger held down on a being: after a second it turns back into a seed
+var _hold_p := Vector2.ZERO
+var _hold_bed := -1
+var _last_input := 0.0
+var _mill_angle := 0.0
+var _mill_boost := 0.0
+var _tree_shake := 0.0
+var _apples: Array = [] ## [pos, vel, age]
+var _worms := {} ## stone index -> age
+var _hog_curl := 0.0
+var _silent_recs := 0
+var _last_singer: Node2D
 
 
 ## Minh Nguyen Studios intro: full on the very first start, short afterwards.
@@ -168,6 +185,9 @@ func _ready() -> void:
 	_overlay.z_index = 10
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
+	var lim := AudioEffectHardLimiter.new()
+	lim.ceiling_db = -3.0
+	AudioServer.add_bus_effect(0, lim)
 	_load()
 	Audio.set_volume(settings.volume)
 	_apply_language()
@@ -193,6 +213,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			for c in beds:
 				if c:
 					c.look_toward(get_global_mouse_position())
+	if event is InputEventMouseButton and not event.pressed:
+		_hold_t = -1.0
+	if event is InputEventMouseMotion and _hold_t >= 0.0 and event.position.distance_to(_hold_p) > 40.0:
+		_hold_t = -1.0
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	_pad_active = false
@@ -268,6 +292,7 @@ func _press_at(p: Vector2) -> void:
 	for btn in [BTN_CONDUCTOR, BTN_SUN, BTN_RAIN, BTN_ECHO]:
 		if p.distance_to(btn) < BTN_R:
 			_presses[btn] = _t
+	_last_input = _t
 	Audio.play_music(_plop, randf_range(-2.0, 2.0) + _shift(), 2.0)
 	if p.distance_to(BTN_PARENT) < 34:
 		_open_parent_gate()
@@ -312,6 +337,8 @@ func _press_at(p: Vector2) -> void:
 		else:
 			_help_one["HELP_CONDUCTOR"] = 4.0
 		return
+	if _tap_toy(p):
+		return
 	for i in BED_POSITIONS.size():
 		var c = beds[i]
 		if c:
@@ -319,6 +346,13 @@ func _press_at(p: Vector2) -> void:
 			if hit.has_point(p):
 				c.cheer()
 				c.sing(_shift())
+				_hold_t = _t
+				_hold_p = p
+				_hold_bed = i
+				_duet(c)
+				for o in beds:
+					if o and o != c:
+						o.look_toward(c.global_position + Vector2(0, -c.height() * 0.6))
 				return
 		elif p.distance_to(BED_POSITIONS[i]) < 105 * BED_SCALE[i]:
 			_plant(i)
@@ -346,8 +380,12 @@ func _finish_recording() -> void:
 	var res := SoundLab.analyze(raw, rate)
 	if res.is_empty():
 		# No sound (or no mic): never fail, a friendly built-in sound grows instead.
+		_silent_recs += 1
+		if _silent_recs >= 2:
+			_help_one["HELP_MIC"] = 7.0 # tells parents the microphone hears nothing
 		_grow_preset(bed)
 		return
+	_silent_recs = 0
 	var file := "bed_%d_%d.pcm" % [bed, Time.get_unix_time_from_system()]
 	_write_pcm(file, res.samples)
 	bed_data[bed] = {"pitch": res.pitch, "loud": res.loud, "freq": res.freq, "file": file, "rate": rate}
@@ -459,6 +497,9 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 	c.scale = Vector2.ONE * BED_SCALE[i] * SPECIES_SCALE[c.species] * (1.0 + float(d.get("size", 0.0)))
 	c.thirst = 1.0 - float(d.get("water", 1.0))
 	c.season = season
+	if fresh and not d.has("gold"):
+		d["gold"] = randf() < 0.08 # now and then a rare golden one
+	c.golden = bool(d.get("gold", false))
 	add_child(c)
 	if i < _bed_fronts.size():
 		move_child(_bed_fronts[i], -1) # lip right after its being
@@ -487,7 +528,8 @@ func _greet() -> void:
 			get_tree().create_timer(delay).timeout.connect(func():
 				if is_instance_valid(c):
 					c.grow_in(1.0, false)
-					c.sing(_shift()))
+					c.sing(_shift())
+					c.celebrate_hop(1.1))
 			delay += 0.5
 
 
@@ -555,8 +597,12 @@ func _echo_game() -> void:
 	state = State.ECHO
 	var beat := 60.0 / _bpm()
 	var singers := beds.filter(func(c): return c != null)
+	# little ones start with a single note; after a few games phrases get longer
+	var level := 1 if int(settings.get("echo_games", 0)) >= 3 else 0
+	settings.echo_games = int(settings.get("echo_games", 0)) + 1
+	_save()
 	for round_i in 3:
-		var length := mini(2 + round_i, 4)
+		var length := mini(1 + round_i + level, 4)
 		_echo_seq.clear()
 		for k in length:
 			var pick = singers[randi() % singers.size()]
@@ -772,6 +818,7 @@ func _wav_to_floats(w: AudioStreamWAV) -> PackedFloat32Array:
 
 
 func _on_sang(who: Node2D) -> void:
+	_last_singer = who
 	if season != Season.WINTER:
 		_song_rings.append([0.0, Creature.PALETTE[who.species]])
 	for c in beds:
@@ -808,7 +855,192 @@ func _creature_count() -> int:
 	return beds.filter(func(c): return c != null).size()
 
 
+# ---------------------------------------------------------------- garden toys
+
+## Windmill, pond, tree, stones, balloon and the hedgehog react to a tap.
+func _tap_toy(p: Vector2) -> bool:
+	if p.distance_to(MILL) < 42:
+		_mill_boost = 1.0
+		for k in 14:
+			_confetti.append([MILL, Vector2.from_angle(randf() * TAU) * randf_range(60, 200), -k * 0.02, [Color("ffc1da"), Color("fff3a0"), Color.WHITE][k % 3], randf() * TAU, 6.0])
+		Audio.play_music(_pluck, _shift() + 7.0, -6.0)
+		return true
+	var bp := _balloon_pos()
+	if bp != Vector2.ZERO and p.distance_to(bp + Vector2(0, 8)) < 44:
+		_balloon_seed(bp)
+		return true
+	var d := (p - POND) / Vector2(90, 28)
+	if d.length() < 1.0 and season != Season.WINTER:
+		var notes := [0.0, 2.0, 4.0, 7.0, 9.0, 12.0]
+		var n: float = notes[clampi(int((p.x - POND.x + 90.0) / 30.0), 0, 5)]
+		_song_rings.append([0.0, Color.from_hsv(n / 12.0, 0.6, 1.0)])
+		Audio.play_music(_plop, _shift() + n, -2.0)
+		return true
+	if p.distance_to(TREE_CROWN) < 85 and state == State.DAY:
+		_tree_shake = 1.0
+		if season != Season.WINTER:
+			for k in 2:
+				_apples.append([TREE_CROWN + Vector2(randf_range(-50, 50), randf_range(-10, 30)), Vector2(randf_range(-30, 30), 0), 0.0])
+		if is_instance_valid(_last_singer):
+			Audio.play(_last_singer.stream, _last_singer.freq, _shift() - 12.0) # the tree hums the last song, low and soft
+		return true
+	for si in STONES.size():
+		var st: Vector3 = STONES[si]
+		if p.distance_to(Vector2(st.x, st.y)) < st.z + 14 and not _in_rest_zone(Vector2(st.x, st.y)):
+			_worms[si] = 0.0
+			for k in 3:
+				get_tree().create_timer(0.15 + k * 0.13).timeout.connect(func(): Audio.play_music(_plop, _shift() + 12.0 + k * 2.0, -8.0))
+			return true
+	var hog := _hedgehog_pos()
+	if hog != Vector2.ZERO and p.distance_to(hog) < 40:
+		_hog_curl = 1.6
+		Audio.play_music(_plop, _shift() + 9.0, -6.0)
+		return true
+	return false
+
+
+func _tick_toys(delta: float) -> void:
+	_mill_boost = maxf(0.0, _mill_boost - delta * 0.35)
+	_mill_angle += delta * ((1.4 if weather == Weather.RAIN else 0.5) + _mill_boost * 7.0)
+	_tree_shake = maxf(0.0, _tree_shake - delta * 2.0)
+	_hog_curl = maxf(0.0, _hog_curl - delta)
+	for ap in _apples:
+		ap[2] += delta
+		if ap[0].y < 468.0:
+			ap[1].y += 900.0 * delta
+			ap[0] += ap[1] * delta
+		elif ap[1].y > 120.0:
+			ap[1] = Vector2(ap[1].x * 0.5, -ap[1].y * 0.35) # bounce
+			ap[0].y = 467.0
+		else:
+			ap[0].y = 470.0
+	_apples = _apples.filter(func(ap): return ap[2] < 6.0)
+	for k in _worms.keys():
+		_worms[k] += delta
+		if _worms[k] > 2.6:
+			_worms.erase(k)
+	# long press on a being: it waves goodbye and becomes a seed again
+	if _hold_t >= 0.0 and _hold_bed >= 0 and state == State.DAY and _t - _hold_t > 1.2:
+		var i := _hold_bed
+		_hold_t = -1.0
+		_hold_bed = -1
+		if beds[i]:
+			_uproot(i)
+
+
+func _uproot(i: int) -> void:
+	var c = beds[i]
+	_mini_burst(c.global_position + Vector2(0, -c.height() * 0.5))
+	Audio.play_music(_pluck, _shift() - 5.0, -4.0)
+	var tw = c.create_tween()
+	tw.tween_property(c, "scale", Vector2(0.05, 0.05), 0.45).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func():
+		_remove_bed(i)
+		_save())
+
+
+## A seed floats down from the balloon on a little parachute and grows in an empty bed.
+func _balloon_seed(from: Vector2) -> void:
+	var free := -1
+	for i in BED_POSITIONS.size():
+		if beds[i] == null and i != _rec_bed:
+			free = i
+			break
+	for k in 16:
+		_confetti.append([from, Vector2.from_angle(randf() * TAU) * randf_range(60, 180), -k * 0.02, [Color("ffd45c"), Color("ff8fb8"), Color("4cc3b5")][k % 3], randf() * TAU, 7.0])
+	Audio.play_music(_pluck, _shift() + 12.0, -4.0)
+	if free < 0:
+		return
+	get_tree().create_timer(1.0).timeout.connect(func():
+		if beds[free] == null and state == State.DAY:
+			_grow_preset(free))
+
+
+func _hedgehog_pos() -> Vector2:
+	var cyc := fmod(_t + 40.0, 150.0)
+	if cyc < 100.0 or cyc > 128.0 or state != State.DAY or weather == Weather.RAIN or season == Season.WINTER or _evening() > 0.5:
+		return Vector2.ZERO
+	var u := (cyc - 100.0) / 28.0
+	return Vector2(lerpf(1340.0, -60.0, u), 704.0)
+
+
+## A shy hedgehog visits now and then; tapped, it rolls into a ball and giggles.
+func _draw_hedgehog(night: float) -> void:
+	var p := _hedgehog_pos()
+	if p == Vector2.ZERO:
+		return
+	if _hog_curl > 0.0:
+		p.x += 0.0
+	var spine := Color("8a6448").lerp(Color("2a2430"), night)
+	var face := Color("e8c9a0").lerp(Color("2a2430"), night)
+	var curl := clampf(_hog_curl, 0.0, 1.0)
+	var bob := absf(sin(_t * 8.0)) * 2.0 * (1.0 - curl)
+	var pts := PackedVector2Array()
+	for i in 19:
+		var a := PI + PI * i / 18.0
+		var r := 26.0 + (5.0 if i % 2 == 0 else 0.0)
+		pts.append(p + Vector2(cos(a) * r, sin(a) * r * lerpf(0.75, 1.0, curl) - bob))
+	pts.append(p + Vector2(26, 0))
+	_draw_ellipse(p + Vector2(0, 4), Vector2(30, 6), Color(0, 0, 0, 0.15))
+	draw_colored_polygon(pts, spine)
+	if curl < 0.5:
+		_draw_ellipse(p + Vector2(-26, -8 - bob), Vector2(12, 9), face)
+		draw_circle(p + Vector2(-37, -9 - bob), 3.0, Color("2b2340"))
+		draw_circle(p + Vector2(-26, -12 - bob), 2.4, Color("2b2340"))
+		for f in [-12.0, 10.0]:
+			draw_circle(p + Vector2(f + sin(_t * 8.0 + f) * 3.0, 1), 4.0, face.darkened(0.2))
+	else:
+		draw_arc(p + Vector2(-6, -12), 5, 0.3, PI - 0.3, 6, Color("2b2340"), 2.0, true)
+		draw_arc(p + Vector2(8, -12), 5, 0.3, PI - 0.3, 6, Color("2b2340"), 2.0, true)
+
+
+## A little worm peeks out from under a stepping stone and giggles.
+func _draw_worm(at: Vector2, age: float, night: float) -> void:
+	var up := clampf(minf(age * 3.0, (2.6 - age) * 3.0), 0.0, 1.0)
+	var col := Color("f2a0a8").lerp(Color("3b3050"), night * 0.6)
+	var wig := sin(age * 14.0) * 4.0
+	for k in 4:
+		draw_circle(at + Vector2(k * 3.0 + wig * k * 0.3, -k * 8.0 * up), 6.0, col)
+	var head := at + Vector2(9.0 + wig, -30.0 * up)
+	draw_circle(head, 7.5, col)
+	if up > 0.5:
+		draw_circle(head + Vector2(-2.5, -1.5), 1.6, Color("2b2340"))
+		draw_circle(head + Vector2(2.5, -1.5), 1.6, Color("2b2340"))
+		draw_arc(head + Vector2(0, 1.5), 3.0, 0.2, PI - 0.2, 6, Color("2b2340"), 1.5, true)
+
+
+## Two friends in the garden answer each other and share a little hug.
+func _duet(c: Node2D) -> void:
+	if not FRIENDS.has(c.species):
+		return
+	for f in beds:
+		if f and f != c and f.species == FRIENDS[c.species]:
+			var beat := 60.0 / _bpm()
+			get_tree().create_timer(beat).timeout.connect(func():
+				if is_instance_valid(f) and is_instance_valid(c):
+					f.sing(_shift() + 4.0)
+					f.love()
+					c.love())
+			return
+
+
+## Bedtime: a painted picture of today's garden goes into the parents' postcard box.
+func _save_postcard() -> void:
+	if screenshot_mode or "--windowed" in OS.get_cmdline_args() and OS.get_cmdline_user_args().size() > 0:
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	img.resize(960, int(960.0 * img.get_height() / img.get_width()), Image.INTERPOLATE_LANCZOS)
+	DirAccess.make_dir_recursive_absolute("user://postcards")
+	img.save_jpg("user://postcards/%s.jpg" % Time.get_datetime_string_from_system().replace(":", "-"), 0.85)
+	var files := Array(DirAccess.get_files_at("user://postcards"))
+	files.sort()
+	while files.size() > 60:
+		DirAccess.remove_absolute("user://postcards/" + files.pop_front())
+
+
 func _go_to_sleep() -> void:
+	_save_postcard()
 	if state == State.RECORDING:
 		Audio.stop_recording()
 		_rec_bed = -1
@@ -848,7 +1080,7 @@ func _process(delta: float) -> void:
 	_t += delta
 	if state != State.NIGHT:
 		day_time += delta
-		if day_time >= day_length() and state == State.DAY:
+		if day_time >= day_length() and state == State.DAY and _t - _last_input > 12.0 and not _can_held:
 			_go_to_sleep()
 	_tick_music(delta)
 	_tick_ambience(delta)
@@ -860,6 +1092,7 @@ func _process(delta: float) -> void:
 			cf[1] *= 0.985
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
 	_tick_water(delta)
+	_tick_toys(delta)
 	_beat_kick = maxf(0.0, _beat_kick - delta * 4.0)
 	for i in _wet.size():
 		_wet[i] = maxf(0.0, _wet[i] - delta * 0.4)
@@ -926,6 +1159,8 @@ func _help_items() -> Array:
 		["HELP_RAIN", BTN_RAIN, Vector2.DOWN],
 		["HELP_CAN", CAN_HOME + Vector2(0, -70), Vector2.UP],
 	]
+	if _help_one.has("HELP_MIC"):
+		items.append(["HELP_MIC", BTN_PARENT + Vector2(-30, 0), Vector2.LEFT])
 	for i in BED_POSITIONS.size():
 		if beds[i] == null:
 			items.append(["HELP_BED", BED_POSITIONS[i] + Vector2(0, -40), Vector2.UP])
@@ -1229,6 +1464,12 @@ func _draw() -> void:
 		_draw_cloud(Vector2(x, 150 + fmod(i * 37.0, 60.0)), 0.42 + fmod(i * 0.21, 0.2), far_cloud, i + 7)
 	_draw_balloon(night, vivid)
 	_draw_birds(night)
+	# rain: a heavy grey blanket closes over the sky
+	if _rain_amount > 0.0:
+		var heavy := Color(Color("7d8796").lerp(Color("2b3150"), night), 0.85 * _rain_amount)
+		for i in 7:
+			var x := fmod(i * 220.0 + _t * 4.0, 1700.0) - 200.0
+			_draw_cloud(Vector2(x, 40 + (i % 2) * 40), 1.4, heavy, i + 20)
 	for i in 5:
 		var speed := 8.0 + i * 3.0
 		var x := fmod(i * 330.0 + _t * speed, 1700.0) - 250.0
@@ -1253,7 +1494,10 @@ func _draw() -> void:
 	draw_rect(Rect2(-2000, 2785, 5280, 2000), near.darkened(0.12))
 
 	# Mid-ground: big tree on the left, fence on the right
-	_draw_tree(Vector2(232, 440), 1.1, night, vivid)
+	_draw_tree(Vector2(232 + sin(_t * 40.0) * 5.0 * _tree_shake, 440), 1.1, night, vivid)
+	for ap in _apples:
+		_draw_ellipse(ap[0], Vector2(8, 7.5), Color("d9473f").lerp(Color("3b2a40"), night * 0.6))
+		draw_line(ap[0] + Vector2(0, -6), ap[0] + Vector2(2, -11), Color("6b4a2e"), 2.0)
 	_draw_fence(Vector2(690, 418), night)
 
 	# Winding path from the front into the garden
@@ -1304,6 +1548,9 @@ func _draw() -> void:
 			var x := fmod(i * 520.0 + _t * (10.0 + i * 3.0), 1900.0) - 300.0
 			draw_colored_polygon(_ellipse_pts(Vector2(x, 470 + i * 90), Vector2(170, 34)), Color(0.1, 0.2, 0.15, 0.07 * (1.0 - dusk)))
 
+	if _rain_amount > 0.0:
+		for pd in [Vector3(560, 640, 46), Vector3(760, 560, 34), Vector3(420, 470, 28)]:
+			_draw_ellipse(Vector2(pd.x, pd.y), Vector2(pd.z, pd.z * 0.28) * _rain_amount, Color(Color("8fb8d8").lerp(top, 0.4), 0.55))
 	_draw_pond(Vector2(1195, 452), top, night)
 	_draw_dragonfly(Vector2(1190, 415), night)
 	_draw_ladybug(Vector2(690, 418), night)
@@ -1311,9 +1558,12 @@ func _draw() -> void:
 		_draw_flower_cluster(Vector2(fc.x, fc.y), int(fc.z), night)
 
 	# Stones and the watering can
-	for st in [Vector3(612, 470, 14), Vector3(640, 528, 17), Vector3(655, 590, 12), Vector3(905, 520, 16)]:
+	for si in STONES.size():
+		var st: Vector3 = STONES[si]
 		if _in_rest_zone(Vector2(st.x, st.y)):
 			continue
+		if _worms.has(si):
+			_draw_worm(Vector2(st.x + st.z * 0.6, st.y), float(_worms[si]), night)
 		var stone := Color("c9c2b8").lerp(Color("3b3d55"), night * 0.8)
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z + 3, st.z * 0.6 + 3), stone.darkened(0.45))
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z, st.z * 0.6), stone)
@@ -1397,6 +1647,7 @@ func _draw() -> void:
 			_draw_ellipse(bp + Vector2(8 * flap, 0), Vector2(9 * flap + 1, 11), bc)
 			draw_line(bp + Vector2(0, -7), bp + Vector2(0, 7), Color("3a2f40"), 2.5)
 
+	_draw_hedgehog(night)
 	var warm := dusk * (1.0 - night)
 	if warm > 0.0:
 		_gradient_rect(Rect2(-2000, 0, 5280, 800), Color(1.0, 0.55, 0.25, 0.14 * warm), Color(1.0, 0.45, 0.3, 0.04 * warm))
@@ -1438,9 +1689,13 @@ func _draw_front() -> void:
 				_front_leaf(p, ph * 0.7, 20.0, [Color("e08a3c"), Color("c9674e"), Color("e0a83e")][int(sp[0].x) % 3].lerp(Color("3b3f7a"), night * 0.6))
 			Season.WINTER:
 				_front.draw_circle(p, 3.0 + fmod(ph * 7.0, 2.5), Color(1, 1, 1, 0.9))
-	if weather == Weather.RAIN:
+	if _rain_amount > 0.0:
 		for r in _rain:
-			_front.draw_line(r, r + Vector2(-6, 18), Color(0.85, 0.9, 1.0, 0.6), 2.0)
+			_front.draw_line(r, r + Vector2(-7, 22), Color(0.85, 0.9, 1.0, 0.7 * _rain_amount), 3.0, true)
+		for i in 10:
+			var sp := Vector2(fmod(i * 137.0, 1280.0), 420 + fmod(i * 61.0, 280.0))
+			var ph := fmod(_t * 1.7 + i * 0.31, 1.0)
+			_front.draw_arc(sp, 3 + ph * 9, PI, TAU, 8, Color(1, 1, 1, 0.6 * (1.0 - ph) * _rain_amount), 2.0, true)
 
 	if hide_ui or state == State.CONCERT:
 		return # during the concert the stage belongs to the singers
@@ -1730,6 +1985,8 @@ func _draw_pond(c: Vector2, sky: Color, night: float) -> void:
 		var w := 46.0 - k * 10.0
 		var shift := sin(_t * 0.8 + k) * 6.0
 		draw_line(Vector2(c.x - w + shift, y), Vector2(c.x + w * 0.4 + shift, y), Color(1, 1, 1, 0.35 if not frozen else 0.7), 2.5, true)
+	if state == State.NIGHT and not frozen:
+		_draw_ellipse(c + Vector2(-20 + sin(_t * 1.3) * 2.0, 2), Vector2(13, 4.5), Color(0.97, 0.95, 0.78, 0.7))
 	if frozen:
 		return
 	# lily pads with a blossom
@@ -1793,6 +2050,11 @@ func _draw_can(ci: CanvasItem, at: Vector2, night: float, rot := 0.0, glow := 0.
 
 func _draw_overlay() -> void:
 	_draw_spots()
+	if _hold_t >= 0.0 and _hold_bed >= 0 and beds[_hold_bed] and _t - _hold_t > 0.3:
+		var c = beds[_hold_bed]
+		var u := clampf((_t - _hold_t - 0.3) / 0.9, 0.0, 1.0)
+		var at: Vector2 = c.global_position + Vector2(0, -c.height() * 0.5)
+		_overlay.draw_arc(at, c.height() * 0.6, -PI / 2, -PI / 2 + TAU * u, 48, Color(1, 1, 1, 0.85), 8.0, true)
 	if state == State.ECHO and not _echo_listen:
 		_draw_echo_badge()
 	if _season_fade > 0.0:
@@ -2022,9 +2284,10 @@ func _draw_windmill(base: Vector2, hill: Color, night: float) -> void:
 	draw_colored_polygon(PackedVector2Array([base + Vector2(-11, -41), base + Vector2(0, -55), base + Vector2(11, -41)]), roof)
 	draw_rect(Rect2(base + Vector2(-3, -12), Vector2(6, 12)), ink)
 	if night > 0.3:
-		draw_circle(base + Vector2(0, -28), 3, Color(1, 0.85, 0.4, night))
+		draw_circle(base + Vector2(0, -28), 12, Color(1, 0.8, 0.4, 0.25 * night))
+		draw_circle(base + Vector2(0, -28), 4, Color(1, 0.85, 0.4, night))
 	var hub := base + Vector2(0, -44)
-	var spin := _t * (1.4 if weather == Weather.RAIN else 0.5)
+	var spin := _mill_angle
 	for k in 4:
 		var a := spin + k * TAU / 4.0
 		var dir := Vector2.from_angle(a)
@@ -2052,14 +2315,20 @@ func _draw_birds(night: float) -> void:
 		draw_polyline(PackedVector2Array([p + Vector2(-w, -flap), p + Vector2(-w * 0.4, -flap * 0.3 - 1), p, p + Vector2(w * 0.4, -flap * 0.3 - 1), p + Vector2(w, -flap)]), ink, 2.2, true)
 
 
+func _balloon_pos() -> Vector2:
+	var cyc := fmod(_t + 20.0, 120.0)
+	if cyc > 60.0 or _evening() > 0.6 or weather == Weather.RAIN or season == Season.WINTER or state == State.CONCERT:
+		return Vector2.ZERO
+	return Vector2(lerpf(-60.0, 1340.0, cyc / 60.0), 120.0 + sin(_t * 0.4) * 10.0)
+
+
 ## A hot-air balloon drifting very slowly across the far sky.
 func _draw_balloon(night: float, vivid: float) -> void:
 	# one sky event at a time: balloon first, birds later in the 120 s cycle
 	var cyc := fmod(_t + 20.0, 120.0)
 	if cyc > 60.0 or night > 0.2 or weather == Weather.RAIN or season == Season.WINTER or state == State.CONCERT:
 		return
-	var x := lerpf(-60.0, 1340.0, cyc / 60.0)
-	var c := Vector2(x, 120.0 + sin(_t * 0.4) * 10.0)
+	var c := _balloon_pos()
 	var cols := [Color("ff8fb8"), Color("ffd45c"), Color("4cc3b5"), Color("ffd45c")]
 	var dim := night * 0.7 + (1.0 - vivid) * 0.3
 	var r := 22.0
