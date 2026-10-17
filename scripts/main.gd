@@ -13,7 +13,7 @@ const BED_POSITIONS := [
 ]
 const BED_SCALE := [0.9, 0.9, 1.04, 1.04, 1.14, 1.14]
 ## Tall or wide species are toned down so neighbours never cover each other.
-const SPECIES_SCALE := [1.0, 1.0, 0.95, 1.0, 1.0, 0.85, 0.92, 0.9, 0.86]
+const SPECIES_SCALE := [1.0, 1.0, 0.95, 1.0, 1.0, 0.85, 0.92, 0.94, 0.98]
 const BTN_CONDUCTOR := Vector2(95, 95)
 const BTN_SUN := Vector2(1035, 95)
 const BTN_RAIN := Vector2(1170, 95)
@@ -186,8 +186,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _pad_input(event):
 		return
-	if event is InputEventMouseMotion and _can_held:
-		_can_pos = get_global_mouse_position()
+	if event is InputEventMouseMotion:
+		if _can_held:
+			_can_pos = get_global_mouse_position()
+		if int(_t * 10) % 2 == 0:
+			for c in beds:
+				if c:
+					c.look_toward(get_global_mouse_position())
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	_pad_active = false
@@ -1889,10 +1894,19 @@ func _draw_button(c: Vector2, col: Color, enabled: bool, active: bool) -> void:
 		col = col.lerp(Color("c9c4bd"), 0.7)
 	var press := 1.0 - 0.12 * maxf(0.0, 1.0 - since * 5.0)
 	var p := c - Vector2(0, bounce)
-	_front.draw_circle(c + Vector2(0, 7), BTN_R + 4, Color(0, 0, 0, 0.25))
-	_front.draw_circle(p, (BTN_R + 4) * press, Color("3a2e4a"))
-	_front.draw_circle(p, (BTN_R - 2) * press, col)
-	_front.draw_arc(p, BTN_R * press - 9, PI * 1.1, PI * 1.6, 12, Color(1, 1, 1, 0.5), 6.0, true)
+	# matte painted stone: ink ring, flat fill, a darker belly instead of a glossy glint
+	var r := BTN_R * press * (0.86 if c == BTN_SUN or c == BTN_RAIN else 1.0)
+	_front.draw_circle(c + Vector2(0, 7), r + 4, Color(0.12, 0.06, 0.1, 0.2))
+	_front.draw_circle(p, r + 4, Color("3a2e4a"))
+	_front.draw_circle(p, r - 2, col)
+	var belly := PackedVector2Array()
+	for i in 17:
+		var a := PI * 0.15 + PI * 0.7 * i / 16.0
+		belly.append(p + Vector2(cos(a), sin(a)) * (r - 2))
+	for i in range(16, -1, -1):
+		var a := PI * 0.15 + PI * 0.7 * i / 16.0
+		belly.append(p + Vector2(cos(a) * (r - 2), sin(a) * (r - 2) * 0.55 + (r - 2) * 0.2))
+	_front.draw_colored_polygon(belly, col.darkened(0.12))
 	_btn_offset = Vector2(0, -bounce)
 	_btn_alpha = 1.0 if enabled else 0.55
 

@@ -259,14 +259,15 @@ func _col(c: Color) -> Color:
 
 
 func _ink(c: Color) -> Color:
-	return _col(c).darkened(0.5)
+	# warm, saturated dark of the fill, pulled toward the plum ink like the model sheets
+	return _col(c).darkened(0.55).lerp(INK, 0.35)
 
 
 ## Filled circle with coloured contour.
 func _circ(p: Vector2, r: float, c: Color, outline := true) -> void:
 	draw_circle(p, r, _col(c))
 	if outline:
-		draw_arc(p, r, 0, TAU, 40, _ink(c), 3.0, true)
+		draw_arc(p, r, 0, TAU, 40, _ink(c), 4.2, true)
 
 
 func _ell_pts(c: Vector2, r: Vector2, rot := 0.0, n := 32) -> PackedVector2Array:
@@ -282,7 +283,7 @@ func _poly(pts: PackedVector2Array, c: Color, outline := true) -> void:
 	if outline:
 		var closed := pts.duplicate()
 		closed.append(pts[0])
-		draw_polyline(closed, _ink(c), 3.0, true)
+		draw_polyline(closed, _ink(c), 4.2, true)
 
 
 func _ell(c: Vector2, r: Vector2, col: Color, rot := 0.0, outline := true) -> void:
@@ -625,11 +626,11 @@ func _draw_frog() -> void:
 	# hind legs and toes
 	for side: float in [-1.0, 1.0]:
 		_ell(Vector2(side * 64, -28), Vector2(26, 26), c.darkened(0.04))
-		_ell(Vector2(side * 78, -6), Vector2(16, 7), c)
+		_web_foot(Vector2(side * 76, -6), side, c)
 	_ell(Vector2(0, -62), Vector2(72, 58), c)
 	_ell(Vector2(0, -44), Vector2(44, 36), Color("f3e6b0"), 0.0, false)
 	for side: float in [-1.0, 1.0]:
-		_ell(Vector2(side * 30, -8), Vector2(14, 7), c)
+		_web_foot(Vector2(side * 30, -6), side, c)
 		draw_colored_polygon(_ell_pts(Vector2(side * 52, -52), Vector2(5, 4), 0.0, 10), _col(c.darkened(0.15)))
 	for x: float in [-40.0, 40.0]:
 		_circ(Vector2(x, -108), 26, c)
@@ -637,6 +638,23 @@ func _draw_frog() -> void:
 	_eyes([Vector2(-40, -110), Vector2(40, -110)], 1.4)
 	_cheeks(Vector2(0, -78), 2.0)
 	_mouth(Vector2(0, -76), 1.8, true)
+
+
+## Three-toed webbed foot fanning outward.
+func _web_foot(at: Vector2, side: float, c: Color) -> void:
+	for t in 3:
+		var d := Vector2.from_angle(lerpf(-0.6, 0.3, t / 2.0)) * Vector2(side, 1)
+		_ell(at + d * 13, Vector2(7, 4.5), c, d.angle())
+	_ell(at, Vector2(11, 7), c)
+
+
+## Look toward a point in the garden (the finger, a sound).
+func look_toward(p: Vector2) -> void:
+	if sleeping:
+		return
+	var d := (p - global_position - Vector2(0, -height() * 0.6)) / 400.0
+	_look_target = d.limit_length(1.0)
+	_look_hold = 1.2
 
 
 func _draw_daisy() -> void:
@@ -711,7 +729,7 @@ func _draw_sunflower() -> void:
 	var green := Color("5fa14a")
 	_stem_legs(green)
 	_stem(Vector2(0, -60), Vector2(0, -140), -4.0, green, 9.0)
-	_leaf_arms(Vector2(0, -82), 58, Color("6cae58"))
+	_leaf_arms(Vector2(0, -82), 72, Color("6cae58"))
 	var center := Vector2(0, -178)
 	var spin := _t * 0.12 * (1.0 - _sleep_blend)
 	var wilt := _sad() * 0.4
@@ -804,17 +822,18 @@ func _eyes(at: Array, k: float) -> void:
 			draw_line(e + Vector2(-9 * out * k, -13 * k), e + Vector2(7 * out * k, -9 * k), INK, 2.5)
 		else:
 			var pupil: Vector2 = e + Vector2(0, 1) + _look * 3.5 * k
-			if true:
+			if species == Species.MUSHROOM:
 				# soft glossy button eyes with a little star of light
 				var ec: Vector2 = e + Vector2(0, 1) + _look * 1.5 * k
 				draw_colored_polygon(_ell_pts(ec, Vector2(7.5, 9) * k, 0.0, 20), INK)
 				_star(ec + Vector2(-2.2, -3.0) * k, 4.2 * k, Color.WHITE)
 				draw_circle(ec + Vector2(2.6, 3.6) * k, 1.4 * k, Color(1, 1, 1, 0.8))
 			else:
-				draw_circle(e, 9 * k, Color.WHITE)
-				draw_arc(e, 9 * k, 0, TAU, 20, INK, 2.0, true)
-				draw_circle(pupil, 5.2 * k, INK)
-				draw_circle(pupil + Vector2(-1.8, -2.0) * k, 1.9 * k, Color.WHITE)
+				draw_circle(e, 10 * k, Color.WHITE)
+				draw_arc(e, 10 * k, 0, TAU, 20, INK, 2.6, true)
+				pupil = e + Vector2(0, 1) + _look * 3.2 * k
+				draw_circle(pupil, 6.6 * k, INK)
+				draw_circle(pupil + Vector2(-2.2, -2.4) * k, 2.3 * k, Color.WHITE)
 
 
 ## 0..1 how visibly thirsty (only when not happy or singing).
