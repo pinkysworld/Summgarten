@@ -402,152 +402,271 @@ func _draw_stage() -> void:
 # ------------------------------------------------------------- species
 
 func _draw_mushroom() -> void:
-	var cap := PALETTE[Species.MUSHROOM]
-	var stem := Color("f6ead2")
-	var body := PackedVector2Array([Vector2(-30, 0), Vector2(-26, -96), Vector2(26, -96), Vector2(30, 0)])
-	_poly(body, stem)
-	_shade(Vector2(14, -48), Vector2(10, 40), stem)
-	_face(Vector2(0, -52), 1.0)
+	# model sheet: pointed lilac cap with gills, cream face, ruffled collar,
+	# little lilac dress, clasped hands and two stubby legs
+	var cap: Color = PALETTE[Species.MUSHROOM].lightened(0.18)
+	var dress := Color("c8b0e6")
+	var cream := Color("f8ecd4")
+	var droop := _sad()
+	# legs and feet
+	for side in [-1, 1]:
+		_poly(PackedVector2Array([Vector2(side * 7, -26), Vector2(side * 19, -26), Vector2(side * 18, -6), Vector2(side * 8, -6)]), dress.darkened(0.08))
+		_ell(Vector2(side * 15, -5), Vector2(13, 6), dress.darkened(0.12))
+	# dress: a bell with a rounded hem
+	var d := PackedVector2Array()
+	d.append(Vector2(-22, -62))
+	for i in 13:
+		var u := float(i) / 12.0
+		d.append(Vector2(lerpf(-42, 42, u), -24 + sin(u * PI) * 4))
+	d.append(Vector2(22, -62))
+	_poly(d, dress)
+	# arms: clasped in front, open wide while singing, hanging when thirsty
+	var open := clampf(sing_amp * 2.5, 0.0, 1.0)
+	for side in [-1, 1]:
+		var sh := Vector2(side * 20, -56)
+		var hand := Vector2(side * 7, -34).lerp(Vector2(side * 58, -66), open).lerp(Vector2(side * 22, -32), droop)
+		var mid := sh.lerp(hand, 0.5) + Vector2(side * 9, 4 - 10 * open)
+		var arm := PackedVector2Array([sh, mid, hand])
+		draw_polyline(arm, _ink(dress), 12.0, true)
+		draw_polyline(arm, _col(dress), 7.0, true)
+		_circ(hand, 6.0, dress)
+	# gills under the cap
+	var gc := Vector2(0, -118)
+	draw_colored_polygon(_ell_pts(gc, Vector2(70, 18), 0.0, 32), _col(cream).darkened(0.04))
+	for i in 11:
+		var ang := PI * 0.08 + PI * 0.84 * i / 10.0
+		var tip := gc + Vector2(-cos(ang) * 62, sin(ang) * 16)
+		if absf(tip.x) > 30:
+			draw_line(gc + Vector2(-cos(ang) * 30, sin(ang) * 6), tip, _ink(cream), 1.6, true)
+	# head with a scalloped collar
+	_circ(Vector2(0, -94), 37, cream)
+	var col := PackedVector2Array()
+	for i in 21:
+		var u := float(i) / 20.0
+		var x := lerpf(-27, 27, u)
+		col.append(Vector2(x, -52 + absf(sin(u * PI * 5.0)) * 6.0))
+	col.append(Vector2(22, -62))
+	col.append(Vector2(-22, -62))
+	_poly(col, cream)
+	_face(Vector2(0, -88), 1.05)
+	draw_colored_polygon(_ell_pts(Vector2(0, -86), Vector2(4, 2.6), 0.0, 12), _col(cap).darkened(0.1))
+	# cap: a soft cone with a slightly rolled rim
 	var top := PackedVector2Array()
-	for i in 29:
-		var a := PI + PI * i / 28.0
-		top.append(Vector2(cos(a) * 82, -96 + sin(a) * 78))
-	for i in range(1, 28):
-		var a := PI * i / 28.0
-		top.append(Vector2(cos(a) * 82, -96 + sin(a) * 12))
+	for i in 33:
+		var t := float(i) / 32.0
+		var x := lerpf(-84, 84, t)
+		var c := absf(x) / 84.0
+		top.append(Vector2(x, -124 - 70 * (1.0 - pow(c, 1.5)) - 6 * (1.0 - c * c)))
+	for i in range(31, 0, -1):
+		var t := float(i) / 32.0
+		top.append(Vector2(lerpf(-84, 84, t), -124 + sin(t * PI) * 8))
 	_poly(top, cap)
-	_shade(Vector2(30, -112), Vector2(40, 22), cap)
-	for d in [Vector3(-42, -130, 13), Vector3(4, -156, 15), Vector3(44, -122, 11), Vector3(-6, -114, 9)]:
-		_circ(Vector2(d.x, d.y), d.z, Color("fff8ec"), false)
-	_shine(Vector2(-40, -148), Vector2(18, 9))
+	for sp in [Vector3(-52, -138, 10), Vector3(-20, -164, 11), Vector3(20, -176, 9), Vector3(46, -150, 12), Vector3(8, -138, 8), Vector3(-70, -126, 6), Vector3(72, -128, 6)]:
+		draw_colored_polygon(_ell_pts(Vector2(sp.x, sp.y), Vector2(sp.z * 1.15, sp.z), 0.0, 18), _col(Color("fbf1e2")))
+
+
+## Arm pose shared by the model sheets: 0 rest, 1 open wide (singing), droops when thirsty.
+func _arm_pose(rest: Vector2, open_to: Vector2, hang: Vector2) -> Vector2:
+	return rest.lerp(open_to, clampf(sing_amp * 2.5, 0.0, 1.0)).lerp(hang, _sad())
+
+
+func _limb(from: Vector2, to: Vector2, bend: float, c: Color, w := 7.0, hand := true) -> void:
+	var mid := from.lerp(to, 0.5) + (to - from).orthogonal().normalized() * bend
+	var pts := PackedVector2Array([from, mid, to])
+	draw_polyline(pts, _ink(c), w + 5.0, true)
+	draw_polyline(pts, _col(c), w, true)
+	if hand:
+		_circ(to, w * 0.85, c)
+
+
+## Two little stem legs with leaf feet, for the flowers.
+func _stem_legs(c: Color) -> void:
+	for side: float in [-1.0, 1.0]:
+		_stem(Vector2(side * 3, -62), Vector2(side * 16, -8), side * 3.0, c, 7.0)
+		_ell(Vector2(side * 24, -6), Vector2(14, 6), c)
+
+
+## Leaf arms: up when singing, hanging when thirsty.
+func _leaf_arms(at: Vector2, length: float, c: Color) -> void:
+	var o := clampf(sing_amp * 2.5, 0.0, 1.0)
+	var d := _sad()
+	_leaf(at, lerpf(lerpf(-2.95, -2.4, o), -4.2, d), length, c)
+	_leaf(at, lerpf(lerpf(-0.19, -0.75, o), 1.05, d), length, c)
 
 
 func _draw_pumpkin() -> void:
 	var c := PALETTE[Species.PUMPKIN]
-	_stem(Vector2(0, -118), Vector2(8, -146), 6.0, Color("6b8e3a"), 10.0)
-	_leaf(Vector2(8, -136), -0.5, 42, Color("7cc86a"))
-	for x in [-46.0, 46.0]:
-		_ell(Vector2(x, -60), Vector2(44, 58), c.darkened(0.08))
-	_ell(Vector2(0, -62), Vector2(52, 62), c)
-	_shade(Vector2(20, -40), Vector2(22, 34), c)
-	_shine(Vector2(-22, -96), Vector2(14, 8))
-	_face(Vector2(0, -64), 1.1)
+	var feet := Color("4a3550")
+	for side: float in [-1.0, 1.0]:
+		_ell(Vector2(side * 24, -8), Vector2(17, 9), feet)
+	# curly stem, tendril and a leaf
+	_stem(Vector2(0, -116), Vector2(-4, -150), 5.0, Color("7a5230"), 11.0)
+	var curl := PackedVector2Array()
+	for i in 24:
+		var a := i * 0.42
+		curl.append(Vector2(26, -146) + Vector2(cos(a), sin(a)) * (10 - i * 0.35))
+	draw_polyline(curl, _ink(Color("6b8e3a")), 3.0, true)
+	draw_line(Vector2(2, -128), Vector2(18, -142), _ink(Color("6b8e3a")), 3.0, true)
+	_leaf(Vector2(30, -140), 0.7, 26, Color("6fa040"))
+	# lobed body
+	for x: float in [-34.0, 34.0]:
+		_ell(Vector2(x, -64), Vector2(38, 58), c.darkened(0.06))
+	_ell(Vector2(0, -66), Vector2(44, 62), c)
+	for x: float in [-24.0, 24.0, -50.0, 50.0]:
+		var line := PackedVector2Array()
+		for i in 9:
+			var u := float(i) / 8.0
+			line.append(Vector2(x * (0.55 + 0.45 * sin(u * PI)), lerpf(-120, -10, u)))
+		draw_polyline(line, _col(c.darkened(0.22)), 2.5, true)
+	_shine(Vector2(-20, -104), Vector2(12, 6))
+	for side: float in [-1.0, 1.0]:
+		_limb(Vector2(side * 40, -70), _arm_pose(Vector2(side * 50, -44), Vector2(side * 80, -104), Vector2(side * 54, -26)), side * -6.0, c, 9.0)
+	_face(Vector2(0, -70), 1.1)
 
 
 func _draw_snail() -> void:
-	var body := Color("b8e0a8")
+	var body := Color("bfe6c4")
 	var shell := PALETTE[Species.SNAIL]
+	var head := Vector2(-36, -100)
+	# eye stalks, the eyes sit on the tips
+	var tips := []
+	for side: float in [-1.0, 1.0]:
+		var tip := head + Vector2(side * 16 + 4, -78 + side * 8) + Vector2(sin(_t * 3.0 + side) * 3, 0)
+		tip.y += _sad() * 18
+		_limb(head + Vector2(side * 10, -26), tip, side * 4.0, body, 6.0, false)
+		_circ(tip, 13, body)
+		tips.append(tip)
+	# neck and wavy foot
+	_ell(head + Vector2(0, 30), Vector2(30, 66), body)
 	var foot := PackedVector2Array()
-	for i in 21:
-		var u := float(i) / 20.0
-		foot.append(Vector2(lerpf(-92, 70, u), -6 + sin(u * PI) * 4))
-	foot.append(Vector2(96, -40))
-	foot.append(Vector2(98, -96))
-	foot.append(Vector2(68, -104))
-	foot.append(Vector2(56, -44))
-	foot.append(Vector2(-60, -30))
+	for i in 25:
+		var u := float(i) / 24.0
+		foot.append(Vector2(lerpf(-80, 86, u), -4 + sin(u * TAU * 3.0) * 2.5))
+	foot.append(Vector2(84, -18))
+	foot.append(Vector2(-10, -26))
+	foot.append(Vector2(-60, -22))
 	_poly(foot, body)
-	for side in [-1.0, 1.0]:
-		var tip := Vector2(84 + side * 16, -150 + sin(_t * 3.0 + side) * 4)
-		draw_line(Vector2(82 + side * 6, -100), tip, _ink(body), 7.0, true)
-		draw_line(Vector2(82 + side * 6, -100), tip, _col(body), 4.0, true)
-		_circ(tip, 7, body)
-	_face(Vector2(82, -70), 0.8)
-	_circ(Vector2(-14, -86), 72, shell)
-	_shade(Vector2(14, -66), Vector2(42, 40), shell)
+	draw_colored_polygon(_ell_pts(Vector2(-36, -30), Vector2(26, 12), 0.0, 16), _col(body))
+	for sp: Vector2 in [Vector2(-14, -62), Vector2(-22, -48), Vector2(-10, -40)]:
+		draw_colored_polygon(_ell_pts(sp, Vector2(4, 3), 0.4, 10), _col(body.darkened(0.18)))
+	# spiral shell
+	var sc := Vector2(30, -78)
+	_circ(sc, 54, shell)
+	_shade(sc + Vector2(16, 20), Vector2(30, 26), shell)
 	var spiral := PackedVector2Array()
-	for i in 60:
+	for i in 56:
 		var a := i * 0.2
-		spiral.append(Vector2(-14, -86) + Vector2(cos(a), sin(a)) * (6 + i * 0.95))
+		spiral.append(sc + Vector2(cos(a), sin(a)) * (3 + i * 0.85))
 	draw_polyline(spiral, _ink(shell), 4.0, true)
-	_shine(Vector2(-50, -130), Vector2(16, 9))
+	_shine(sc + Vector2(-24, -28), Vector2(12, 7))
+	_eyes(tips, 1.15)
+	_cheeks(head + Vector2(0, -2), 0.75)
+	_mouth(head + Vector2(0, 4), 0.8)
 
 
 func _draw_beetle() -> void:
 	var c := PALETTE[Species.BEETLE]
-	for x in [-26.0, 26.0]:
-		_ell(Vector2(x, -10), Vector2(16, 11), c.darkened(0.3))
-	for side in [-1.0, 1.0]:
-		var tip := Vector2(side * 32, -168 + sin(_t * 3.0 + side) * 5)
-		draw_line(Vector2(side * 16, -126), tip, _ink(c), 5.0, true)
-		_circ(tip, 10, Color("ffc93c"))
-	_ell(Vector2(0, -72), Vector2(66, 70), c)
-	_ell(Vector2(0, -52), Vector2(40, 34), c.lightened(0.35), 0.0, false)
-	_shade(Vector2(28, -54), Vector2(24, 36), c)
-	_shine(Vector2(-30, -112), Vector2(18, 10))
-	_face(Vector2(0, -84), 1.2)
+	var dark := Color("3d3050")
+	for side: float in [-1.0, 1.0]:
+		_limb(Vector2(side * 20, -24), Vector2(side * 24, -6), 0.0, dark, 9.0, false)
+		_ell(Vector2(side * 28, -6), Vector2(15, 7), dark)
+		_limb(Vector2(side * 52, -86), _arm_pose(Vector2(side * 66, -56), Vector2(side * 84, -112), Vector2(side * 60, -36)), side * -6.0, dark, 7.0)
+		var tip := Vector2(side * 30, -180 + sin(_t * 3.0 + side) * 5)
+		tip.y += _sad() * 16
+		tip.x += _sad() * side * 14
+		_limb(Vector2(side * 14, -140), tip, side * -5.0, dark, 3.0, false)
+		_circ(tip, 9, Color("ffc93c"))
+	_ell(Vector2(0, -80), Vector2(58, 70), c)
+	# head band and wing case seam
+	var band := PackedVector2Array()
+	for i in 17:
+		var u := float(i) / 16.0
+		band.append(Vector2(lerpf(-56, 56, u), -98 + sin(u * PI) * 10))
+	draw_polyline(band, _ink(c), 3.0, true)
+	draw_line(Vector2(0, -88), Vector2(0, -12), _ink(c), 3.0, true)
+	for sp: Vector2 in [Vector2(-30, -70), Vector2(-22, -40), Vector2(30, -66), Vector2(22, -38), Vector2(-40, -48), Vector2(40, -46)]:
+		draw_colored_polygon(_ell_pts(sp, Vector2(4, 7), 0.0, 10), _col(c.darkened(0.15)))
+	_shine(Vector2(-26, -132), Vector2(14, 7))
+	_face(Vector2(0, -116), 1.15)
 
 
 func _draw_bird() -> void:
 	var c := PALETTE[Species.BIRD]
-	for x in [-14.0, 14.0]:
-		draw_line(Vector2(x, 0), Vector2(x, -22), _ink(Color("ff9a3c")), 5.0, true)
-	var tail := PackedVector2Array([Vector2(-52, -70), Vector2(-104, -108), Vector2(-96, -60)])
-	_poly(tail, c.darkened(0.15))
-	_ell(Vector2(0, -78), Vector2(62, 62), c)
-	_ell(Vector2(4, -56), Vector2(38, 32), Color("fff1d6"), 0.0, false)
-	var flap := sin(_t * 2.0) * 0.12 + sing_amp * 0.5
-	_ell(Vector2(-26, -76), Vector2(32, 20), c.darkened(0.12), 0.6 + flap)
-	_poly(PackedVector2Array([Vector2(46, -92), Vector2(78, -84 + sing_amp * 6), Vector2(46, -74)]), Color("ffb03c"))
+	var dark := Color("3d3050")
+	for side: float in [-1.0, 1.0]:
+		var foot := Vector2(side * 18, -2)
+		draw_line(Vector2(side * 14, -26), foot, _col(dark), 4.0, true)
+		for t: float in [-1.0, 0.0, 1.0]:
+			draw_line(foot, foot + Vector2(t * 9 + side * 3, 3), _col(dark), 3.0, true)
+	# crest
 	for k in 3:
-		_ell(Vector2(-8 + k * 10, -146 - k * 4), Vector2(5, 14), c.darkened(0.2), -0.3 + k * 0.3)
-	_shine(Vector2(-22, -118), Vector2(16, 9))
-	_face(Vector2(14, -96), 1.0, false)
+		_ell(Vector2(-6 + k * 9, -150 - (6 if k == 1 else 0)), Vector2(6, 16), c.darkened(0.08), -0.5 + k * 0.45)
+	_ell(Vector2(0, -84), Vector2(56, 66), c)
+	_ell(Vector2(4, -52), Vector2(36, 34), Color("fbf3e2"), 0.0, false)
+	for sp: Vector2 in [Vector2(-8, -60), Vector2(10, -56), Vector2(0, -42), Vector2(18, -40), Vector2(-14, -40)]:
+		draw_colored_polygon(_ell_pts(sp, Vector2(2.2, 4), 0.0, 8), _col(c.lightened(0.1)))
+	# wings flap open while singing
+	var o := clampf(sing_amp * 2.5, 0.0, 1.0)
+	for side: float in [-1.0, 1.0]:
+		var rot := side * (0.35 + 0.9 * o - _sad() * 0.25) + sin(_t * 2.0) * 0.06
+		_ell(Vector2(side * (50 + 10 * o), -76 - 10 * o), Vector2(14, 34), c.darkened(0.1), rot)
+	_shine(Vector2(-24, -124), Vector2(14, 7))
+	var eye_y := -112.0
+	_eyes([Vector2(-20, eye_y), Vector2(20, eye_y)], 1.1)
+	_cheeks(Vector2(0, -96), 1.0)
+	var gape := 3.0 + 10.0 * sing_amp + 6.0 * yawn_amt
+	_poly(PackedVector2Array([Vector2(-10, -100), Vector2(10, -100), Vector2(0, -88)]), Color("ffa63c"))
+	if gape > 4.0:
+		_poly(PackedVector2Array([Vector2(-8, -96 + gape * 0.4), Vector2(8, -96 + gape * 0.4), Vector2(0, -88 + gape)]), Color("f08a2c"))
 
 
 func _draw_frog() -> void:
 	var c := PALETTE[Species.FROG]
-	for x in [-56.0, 56.0]:
-		_ell(Vector2(x, -12), Vector2(24, 12), c.darkened(0.15))
-	_ell(Vector2(0, -56), Vector2(80, 54), c)
-	_ell(Vector2(0, -40), Vector2(52, 26), Color("e9f7c8"), 0.0, false)
-	_shade(Vector2(36, -44), Vector2(30, 24), c)
-	for x in [-38.0, 38.0]:
-		_circ(Vector2(x, -110), 26, c)
-	_shine(Vector2(-50, -80), Vector2(18, 9))
-	_eyes([Vector2(-38, -112), Vector2(38, -112)], 1.4)
-	_cheeks(Vector2(0, -66), 2.2)
-	_mouth(Vector2(0, -64), 1.8, true)
+	# hind legs and toes
+	for side: float in [-1.0, 1.0]:
+		_ell(Vector2(side * 64, -28), Vector2(26, 26), c.darkened(0.04))
+		_ell(Vector2(side * 78, -6), Vector2(16, 7), c)
+	_ell(Vector2(0, -62), Vector2(72, 58), c)
+	_ell(Vector2(0, -44), Vector2(44, 36), Color("f3e6b0"), 0.0, false)
+	for side: float in [-1.0, 1.0]:
+		_ell(Vector2(side * 30, -8), Vector2(14, 7), c)
+		draw_colored_polygon(_ell_pts(Vector2(side * 52, -52), Vector2(5, 4), 0.0, 10), _col(c.darkened(0.15)))
+	for x: float in [-40.0, 40.0]:
+		_circ(Vector2(x, -108), 26, c)
+	_shine(Vector2(-48, -88), Vector2(14, 7))
+	_eyes([Vector2(-40, -110), Vector2(40, -110)], 1.4)
+	_cheeks(Vector2(0, -78), 2.0)
+	_mouth(Vector2(0, -76), 1.8, true)
 
 
 func _draw_daisy() -> void:
 	var c := PALETTE[Species.DAISY]
 	var green := Color("5fa14a")
-	_stem(Vector2(0, 0), Vector2(0, -120), 10.0, green)
-	_leaf(Vector2(2, -40), -2.6, 52, Color("7cc86a"))
-	_leaf(Vector2(4, -74), -0.5, 46, Color("7cc86a"))
-	var center := Vector2(0, -140)
-	var spin := _t * 0.25 * (1.0 - _sleep_blend)
+	_stem_legs(green)
+	_stem(Vector2(0, -60), Vector2(0, -124), 2.0, green, 8.0)
+	_leaf_arms(Vector2(0, -72), 48, Color("6cae58"))
+	var center := Vector2(0, -150)
+	var spin := _t * 0.2 * (1.0 - _sleep_blend)
+	var wilt := _sad() * 0.35
+	for i in 10:
+		var a := TAU * i / 10.0 + spin
+		var p := center + Vector2(cos(a), sin(a) + wilt) * 46
+		_ell(p, Vector2(26, 15), c, a)
+	_circ(center, 36, Color("fbe3b0"))
 	for i in 7:
-		var a := TAU * i / 7.0 + spin
-		_ell(center + Vector2(cos(a), sin(a)) * 44, Vector2(28, 19), c, a)
-	_circ(center, 38, Color("ffd84d"))
-	_shine(center + Vector2(-14, -18), Vector2(10, 6))
-	_face(center, 0.95)
+		draw_circle(center + Vector2(-14 + i * 5, -22 + (i % 2) * 3), 1.2, _col(Color("e8b080")))
+	_face(center + Vector2(0, 4), 0.95)
 
 
 func _draw_bell() -> void:
 	var c := PALETTE[Species.BELL]
 	var green := Color("5fa14a")
-	var stem := PackedVector2Array()
-	for i in 17:
-		var u := float(i) / 16.0
-		stem.append(Vector2(sin(u * 2.4) * 46, -u * 210))
-	draw_polyline(stem, _ink(green), 13.0, true)
-	draw_polyline(stem, _col(green), 8.0, true)
-	_leaf(Vector2(8, -50), -2.9, 50, Color("7cc86a"))
-	_leaf(Vector2(30, -110), -0.4, 40, Color("7cc86a"))
-	for b in [Vector2(-34, -150), Vector2(64, -176)]:
-		var bell := PackedVector2Array()
-		for i in 13:
-			var a := PI * i / 12.0
-			bell.append(b + Vector2(-cos(a) * 16, -sin(a) * 18))
-		bell.append(b + Vector2(20, 10))
-		bell.append(b + Vector2(-20, 10))
-		_poly(bell, c.lightened(0.15))
-	# the big singing bell hangs from the top: dome, flaring sides, five curled tips
-	var top := Vector2(30, -206)
-	var hang := sin(_t * 1.5) * 0.08 + sing_amp * 0.25
+	_stem_legs(green)
+	_stem(Vector2(0, -60), Vector2(0, -130), -3.0, green, 8.0)
+	_leaf_arms(Vector2(0, -76), 50, Color("6cae58"))
+	# the bell head: dome, flaring sides, five curled tips
+	var top := Vector2(0, -214)
+	var hang := sin(_t * 1.5) * 0.06 + sing_amp * 0.2 + _sad() * 0.12
 	var pts := PackedVector2Array()
 	for i in 13:
 		var a := PI + PI * i / 12.0
@@ -560,53 +679,62 @@ func _draw_bell() -> void:
 		var x1 := lerpf(58, -58, float(tip + 1) / 5.0)
 		var mx := (x0 + x1) / 2.0
 		pts.append(Vector2(lerpf(x0, mx, 0.5) + 4, 104))
-		pts.append(Vector2(mx, 116))
+		pts.append(Vector2(mx, 112))
 		pts.append(Vector2(lerpf(mx, x1, 0.5) - 4, 104))
 		if tip < 4:
-			pts.append(Vector2(x1, 96))
+			pts.append(Vector2(x1, 98))
 	for i in range(6, -1, -1):
 		var u := float(i) / 6.0
 		pts.append(Vector2(-40 - 18 * u * u, 34 + 58 * u))
 	for i in pts.size():
 		pts[i] = top + pts[i].rotated(hang)
 	_poly(pts, c)
-	_shade(top + Vector2(22, 66).rotated(hang), Vector2(14, 28), c)
 	_shine(top + Vector2(-20, 30).rotated(hang), Vector2(10, 7))
-	# green calyx joins the bell to the stem
+	# calyx and a curled stem tip
 	var calyx := PackedVector2Array()
-	for i in 10:
-		var a := PI + PI * i / 9.0
-		var r := 22.0 if i % 2 == 0 else 12.0
-		calyx.append(top + Vector2(cos(a) * r, 8 + sin(a) * r * 0.6).rotated(hang))
+	for i in 11:
+		var a := PI + PI * i / 10.0
+		var r := 26.0 if i % 2 == 0 else 13.0
+		calyx.append(top + Vector2(cos(a) * r, 12 + sin(a) * r * 0.55).rotated(hang))
 	_poly(calyx, green)
-	_face(top + Vector2(0, 72).rotated(hang), 0.95)
+	var curl := PackedVector2Array()
+	for i in 20:
+		var a := PI - i * 0.32
+		curl.append(top + (Vector2(10, -10) + Vector2(cos(a), sin(a)) * (12 - i * 0.45)).rotated(hang))
+	draw_polyline(curl, _ink(green), 7.0, true)
+	draw_polyline(curl, _col(green), 4.0, true)
+	_face(top + Vector2(0, 66).rotated(hang), 0.95)
 
 
 func _draw_sunflower() -> void:
 	var c := PALETTE[Species.SUNFLOWER]
 	var green := Color("5fa14a")
-	_stem(Vector2(0, 0), Vector2(0, -150), -14.0, green, 11.0)
-	_leaf(Vector2(-4, -50), -2.7, 64, Color("6cbf58"))
-	_leaf(Vector2(-6, -96), -0.35, 58, Color("6cbf58"))
-	var center := Vector2(0, -170)
-	var spin := _t * 0.15 * (1.0 - _sleep_blend)
+	_stem_legs(green)
+	_stem(Vector2(0, -60), Vector2(0, -140), -4.0, green, 9.0)
+	_leaf_arms(Vector2(0, -82), 58, Color("6cae58"))
+	var center := Vector2(0, -178)
+	var spin := _t * 0.12 * (1.0 - _sleep_blend)
+	var wilt := _sad() * 0.4
 	for ring in 2:
-		for i in 12:
-			var a := TAU * (i + ring * 0.5) / 12.0 + spin
-			var col := c if ring == 1 else c.darkened(0.12)
-			_ell(center + Vector2(cos(a), sin(a)) * (58 - ring * 4), Vector2(30, 13), col, a)
-	_circ(center, 48, Color("8a5a2b"))
-	for i in 18:
+		for i in 14:
+			var a := TAU * (i + ring * 0.5) / 14.0 + spin
+			var col := c.darkened(0.1) if ring == 0 else c
+			var dir := Vector2(cos(a), sin(a) + wilt).normalized()
+			var base := center + dir * 40
+			var side := dir.orthogonal() * 9
+			_poly(PackedVector2Array([base + side, base + dir * 18 + side * 1.1, base + dir * 34, base + dir * 18 - side * 1.1, base - side]), col)
+	_circ(center, 44, Color("9a6634"))
+	for i in 16:
 		var a := i * 2.4
-		var r := sqrt(float(i)) * 9.0
-		draw_circle(center + Vector2(cos(a), sin(a)) * r, 2.6, _col(Color("5e3b1a")))
-	_face(center + Vector2(0, 6), 1.15)
+		var r := 10.0 + sqrt(float(i)) * 7.0
+		draw_circle(center + Vector2(cos(a), sin(a)) * r, 1.8, _col(Color("6e4420")))
+	_face(center + Vector2(0, 4), 1.1)
 
 
 ## Accessory anchor per species: (x, y) = centre of the hat brim, z = scale.
 ## Always well above the eyes so nothing covers a face.
-const HAT := [Vector3(0, -170, 1.0), Vector3(0, -122, 0.95), Vector3(84, -104, 0.62), Vector3(0, -138, 1.0),
-	Vector3(6, -138, 0.9), Vector3(-38, -134, 0.62), Vector3(0, -176, 0.82), Vector3(30, -200, 0.8), Vector3(0, -216, 0.95)]
+const HAT := [Vector3(0, -186, 0.9), Vector3(-8, -140, 0.9), Vector3(-36, -134, 0.62), Vector3(0, -144, 0.95),
+	Vector3(0, -146, 0.9), Vector3(-40, -130, 0.6), Vector3(0, -192, 0.82), Vector3(0, -218, 0.8), Vector3(0, -222, 0.95)]
 const HAT_TILT := [-0.12, 0.1, 0.08, -0.1, 0.12, -0.2, 0.1, -0.08, 0.12]
 
 
@@ -675,11 +803,18 @@ func _eyes(at: Array, k: float) -> void:
 			draw_line(e + Vector2(-10 * k, 0), e + Vector2(10 * k, 0), INK, 3.0)
 			draw_line(e + Vector2(-9 * out * k, -13 * k), e + Vector2(7 * out * k, -9 * k), INK, 2.5)
 		else:
-			draw_circle(e, 9 * k, Color.WHITE)
-			draw_arc(e, 9 * k, 0, TAU, 20, INK, 2.0, true)
 			var pupil: Vector2 = e + Vector2(0, 1) + _look * 3.5 * k
-			draw_circle(pupil, 5.2 * k, INK)
-			draw_circle(pupil + Vector2(-1.8, -2.0) * k, 1.9 * k, Color.WHITE)
+			if true:
+				# soft glossy button eyes with a little star of light
+				var ec: Vector2 = e + Vector2(0, 1) + _look * 1.5 * k
+				draw_colored_polygon(_ell_pts(ec, Vector2(7.5, 9) * k, 0.0, 20), INK)
+				_star(ec + Vector2(-2.2, -3.0) * k, 4.2 * k, Color.WHITE)
+				draw_circle(ec + Vector2(2.6, 3.6) * k, 1.4 * k, Color(1, 1, 1, 0.8))
+			else:
+				draw_circle(e, 9 * k, Color.WHITE)
+				draw_arc(e, 9 * k, 0, TAU, 20, INK, 2.0, true)
+				draw_circle(pupil, 5.2 * k, INK)
+				draw_circle(pupil + Vector2(-1.8, -2.0) * k, 1.9 * k, Color.WHITE)
 
 
 ## 0..1 how visibly thirsty (only when not happy or singing).
