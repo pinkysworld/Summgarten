@@ -18,8 +18,11 @@ const BTN_CONDUCTOR := Vector2(95, 95)
 const BTN_SUN := Vector2(1035, 95)
 const BTN_RAIN := Vector2(1170, 95)
 const BTN_PARENT := Vector2(1240, 200)
+const BTN_HELP := Vector2(1240, 268)
 const BTN_ECHO := Vector2(95, 235)
 const BTN_R := 56.0
+const CAN_HOME := Vector2(1010, 705)
+const MAX_GROWTH := 0.25 ## watering makes a being up to 25 % bigger
 
 enum Weather { NONE, SUN, RAIN }
 enum State { DAY, RECORDING, CONCERT, NIGHT, ECHO }
@@ -83,6 +86,14 @@ var season := Season.SUMMER
 var _auto_season := 1
 var _season_parts: Array = [] ## falling petals / leaves / snow: [pos, phase] ## key art: no buttons, no empty beds
 var _overlay := Node2D.new()
+var _can_held := false
+var _can_pos := CAN_HOME
+var _pour := 0.0 ## seconds left of the pouring animation
+var _pour_drops: Array = [] ## [pos, vel, age]
+var _water_save := 0.0
+var _help_all := 0.0 ## seconds left showing every explanation bubble
+var _help_one := {} ## help key -> seconds left (a single bubble)
+var _help_font: Font
 
 
 ## Minh Nguyen Studios intro: full on the very first start, short afterwards.
@@ -159,9 +170,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if _pad_input(event):
 		return
+	if event is InputEventMouseMotion and _can_held:
+		_can_pos = get_global_mouse_position()
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	_pad_active = false
+	if _can_held:
+		_can_pos = get_global_mouse_position()
 	_press_at(get_global_mouse_position())
 
 
@@ -173,6 +188,7 @@ func _focus_targets() -> Array:
 	for i in BED_POSITIONS.size():
 		var c = beds[i]
 		t.append(BED_POSITIONS[i] + Vector2(0, -c.height() * 0.5) if c else BED_POSITIONS[i] + Vector2(0, -10))
+	t.append(CAN_HOME + Vector2(0, -35))
 	return t
 
 
@@ -200,6 +216,8 @@ func _pad_input(event: InputEvent) -> bool:
 		return false
 	_pad_active = true
 	_move_focus(dir)
+	if _can_held:
+		_can_pos = _focus_targets()[_focus]
 	return true
 
 
@@ -233,6 +251,10 @@ func _press_at(p: Vector2) -> void:
 	if p.distance_to(BTN_PARENT) < 34:
 		_open_parent_gate()
 		return
+	if p.distance_to(BTN_HELP) < 30:
+		_help_all = 0.0 if _help_all > 0.0 else 12.0
+		_help_one.clear()
+		return
 	match state:
 		State.RECORDING, State.CONCERT:
 			return
@@ -243,6 +265,14 @@ func _press_at(p: Vector2) -> void:
 			if p.distance_to(BTN_SUN) < BTN_R:
 				_wake_up()
 			return
+	if _can_held:
+		_use_can(p)
+		return
+	if p.distance_to(CAN_HOME + Vector2(10, -35)) < 62:
+		_can_held = true
+		_can_pos = p
+		Audio.play_music(_pluck, _shift(), -4.0)
+		return
 	if p.distance_to(BTN_SUN) < BTN_R:
 		_set_weather(Weather.NONE if weather == Weather.SUN else Weather.SUN)
 		return
@@ -252,10 +282,14 @@ func _press_at(p: Vector2) -> void:
 	if p.distance_to(BTN_ECHO) < BTN_R:
 		if _creature_count() >= 2:
 			_echo_game()
+		else:
+			_help_one["HELP_ECHO"] = 4.0
 		return
 	if p.distance_to(BTN_CONDUCTOR) < BTN_R:
 		if _creature_count() >= 3:
 			_concert()
+		else:
+			_help_one["HELP_CONDUCTOR"] = 4.0
 		return
 	for i in BED_POSITIONS.size():
 		var c = beds[i]
@@ -300,6 +334,54 @@ func _finish_recording() -> void:
 	_save()
 
 
+## Holding the can: tap a being to water it, anywhere else puts the can back.
+func _use_can(p: Vector2) -> void:
+	for i in BED_POSITIONS.size():
+		if beds[i] and _bed_hit(i).has_point(p):
+			_water_bed(i)
+			return
+	_can_held = false
+	_can_pos = CAN_HOME
+
+
+func _bed_hit(i: int) -> Rect2:
+	var c = beds[i]
+	return Rect2(BED_POSITIONS[i] + Vector2(-c.radius() - 20, -c.height() - 20), Vector2(c.radius() * 2 + 40, c.height() + 50))
+
+
+func _water_bed(i: int) -> void:
+	var c = beds[i]
+	var d: Dictionary = bed_data[i]
+	_can_pos = BED_POSITIONS[i] + Vector2(105, -c.height() - 30)
+	_pour = 1.1
+	for k in 34:
+		_pour_drops.append([_can_pos + Vector2(-100, 8), Vector2(randf_range(-50, 10), randf_range(-20, 30)), -k * 0.03])
+	var was := float(d.get("water", 1.0))
+	# a thirsty being just recovers; a happy one gets a little bigger
+	if was > 0.5:
+		d["size"] = minf(MAX_GROWTH, float(d.get("size", 0.0)) + 0.05)
+	d["water"] = 1.0
+	get_tree().create_timer(0.5).timeout.connect(func():
+		if is_instance_valid(c):
+			c.water()
+			_apply_bed_scale(i, true)
+			c.sing(_shift()))
+	Audio.play_music(_plop, 7.0 + _shift(), 0.0)
+	_save()
+
+
+func _apply_bed_scale(i: int, animate: bool) -> void:
+	var c = beds[i]
+	if not c:
+		return
+	var d: Dictionary = bed_data[i]
+	var target: Vector2 = Vector2.ONE * BED_SCALE[i] * SPECIES_SCALE[c.species] * (1.0 + float(d.get("size", 0.0)))
+	if animate:
+		c.create_tween().tween_property(c, "scale", target, 0.8).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	else:
+		c.scale = target
+
+
 func _grow_preset(i: int) -> void:
 	# Prefer a sound whose species is not in the garden yet, so it stays varied.
 	var used := {}
@@ -335,10 +417,10 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 		freq = float(d.freq)
 	var c := Creature.new()
 	c.position = BED_POSITIONS[i]
-	c.scale = Vector2.ONE * BED_SCALE[i]
 	c.z_index = _bed_z(i)
-	c.scale *= SPECIES_SCALE[c.species]
 	c.setup(pitch, loud, wav, freq)
+	c.scale = Vector2.ONE * BED_SCALE[i] * SPECIES_SCALE[c.species] * (1.0 + float(d.get("size", 0.0)))
+	c.thirst = 1.0 - float(d.get("water", 1.0))
 	c.season = season
 	add_child(c)
 	if i < _bed_fronts.size():
@@ -356,6 +438,10 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 
 
 func _greet() -> void:
+	if not settings.get("help_seen", false) and not screenshot_mode:
+		settings.help_seen = true
+		_help_all = 14.0
+		_save()
 	var delay := 0.6
 	for i in beds.size():
 		var c = beds[i]
@@ -663,6 +749,8 @@ func _go_to_sleep() -> void:
 		Audio.stop_recording()
 		_rec_bed = -1
 	state = State.NIGHT
+	_can_held = false
+	_can_pos = CAN_HOME
 	weather = Weather.NONE
 	var delay := 0.3
 	for c in beds:
@@ -706,6 +794,19 @@ func _process(delta: float) -> void:
 			cf[1].y += 160.0 * delta
 			cf[1] *= 0.985
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
+	_tick_water(delta)
+	_help_all = maxf(0.0, _help_all - delta)
+	for k in _help_one.keys():
+		_help_one[k] -= delta
+		if _help_one[k] <= 0.0:
+			_help_one.erase(k)
+	_pour = maxf(0.0, _pour - delta)
+	for dr in _pour_drops:
+		dr[2] += delta
+		if dr[2] > 0.0:
+			dr[0] += dr[1] * delta
+			dr[1].y += 700.0 * delta
+	_pour_drops = _pour_drops.filter(func(dr): return dr[2] < 0.7)
 	_rain_amount = move_toward(_rain_amount, 1.0 if weather == Weather.RAIN else 0.0, delta * 0.5)
 	_rainbow = maxf(0.0, _rainbow - delta / 12.0)
 	var fall := 70.0 if season == Season.WINTER else 45.0
@@ -734,6 +835,99 @@ func _process(delta: float) -> void:
 	_front.queue_redraw()
 	for bf in _bed_fronts:
 		bf.queue_redraw()
+
+
+## Explanation bubbles for parents and older children: [key, target, side].
+func _help_items() -> Array:
+	var items := [
+		["HELP_CONDUCTOR", BTN_CONDUCTOR, Vector2.RIGHT],
+		["HELP_ECHO", BTN_ECHO, Vector2.RIGHT],
+		["HELP_SUN", BTN_SUN, Vector2.DOWN],
+		["HELP_RAIN", BTN_RAIN, Vector2.DOWN],
+		["HELP_CAN", CAN_HOME + Vector2(0, -70), Vector2.UP],
+	]
+	for i in BED_POSITIONS.size():
+		if beds[i] == null:
+			items.append(["HELP_BED", BED_POSITIONS[i] + Vector2(0, -40), Vector2.UP])
+			break
+	return items
+
+
+func _draw_help() -> void:
+	if (_help_all <= 0.0 and _help_one.is_empty()) or hide_ui or state == State.NIGHT:
+		return
+	if _help_font == null:
+		_help_font = ParentPanel.cjk_font()
+	var ink := Color("2f2a4a")
+	for it in _help_items():
+		var key: String = it[0]
+		var left: float = _help_all if _help_all > 0.0 else float(_help_one.get(key, 0.0))
+		if left <= 0.0:
+			continue
+		var a := clampf(left * 2.0, 0.0, 1.0)
+		var text := tr(key)
+		var size := _help_font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, 250, 19)
+		var box := size + Vector2(28, 20)
+		var target: Vector2 = it[1]
+		var side: Vector2 = it[2]
+		var gap := BTN_R + 22.0
+		var pos: Vector2
+		if side == Vector2.RIGHT:
+			pos = target + Vector2(gap, -box.y * 0.5)
+		elif side == Vector2.DOWN:
+			# sun and rain sit side by side: stack their bubbles
+			pos = target + Vector2(-box.x + 40, gap + (84.0 if key == "HELP_RAIN" else 0.0))
+		else:
+			pos = target + Vector2(-box.x * 0.5, -box.y - 34)
+		pos.x = clampf(pos.x, 10, 1270 - box.x)
+		pos.y += sin(_t * 2.0 + target.x) * 2.0
+		var r := Rect2(pos, box)
+		var tip := target + side * (BTN_R + 4.0) if side != Vector2.UP else target
+		var base := r.get_center().clamp(r.position + Vector2(24, 18), r.end - Vector2(24, 18))
+		var n := (tip - base).normalized().orthogonal() * 12.0
+		_overlay.draw_colored_polygon(PackedVector2Array([base + n, tip, base - n]), Color(ink, a))
+		_overlay.draw_style_box(_help_box(Color(ink, a)), r.grow(3))
+		_overlay.draw_colored_polygon(PackedVector2Array([base + n * 0.7, tip.lerp(base, 0.12), base - n * 0.7]), Color(1, 0.98, 0.93, a))
+		_overlay.draw_style_box(_help_box(Color(1, 0.98, 0.93, a)), r)
+		_overlay.draw_multiline_string(_help_font, pos + Vector2(14, 10 + _help_font.get_ascent(19)), text, HORIZONTAL_ALIGNMENT_LEFT, 250, 19, -1, Color(ink, a))
+
+
+func _help_box(col: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = col
+	sb.set_corner_radius_all(16)
+	return sb
+
+
+## The can glows softly while somebody in the garden is thirsty.
+func _can_hint() -> float:
+	if state != State.DAY:
+		return 0.0
+	for c in beds:
+		if c and c.thirst > 0.55:
+			return 0.6 + 0.4 * sin(_t * 3.0)
+	return 0.0
+
+
+## Beings get thirsty over about one garden day; rain waters everyone.
+func _tick_water(delta: float) -> void:
+	if state == State.NIGHT or screenshot_mode:
+		return
+	var change := -delta / (day_length() * 0.9)
+	if weather == Weather.RAIN:
+		change = delta * 0.25
+	for i in beds.size():
+		var c = beds[i]
+		if not c:
+			continue
+		var d: Dictionary = bed_data[i]
+		var w := clampf(float(d.get("water", 1.0)) + change, 0.0, 1.0)
+		d["water"] = w
+		c.thirst = 1.0 - w
+	_water_save += delta
+	if _water_save > 20.0:
+		_water_save = 0.0
+		_save()
 
 
 func _tick_ambience(delta: float) -> void:
@@ -830,10 +1024,17 @@ func _draw() -> void:
 	# Drifting clouds
 	var cloud_col := Color(1, 1, 1, 0.92).lerp(Color("c9a0b8"), dusk * 0.5).lerp(Color("39406e"), night)
 	cloud_col = cloud_col.lerp(Color("8e98a6"), 1.0 - vivid)
+	# far layer: small, pale, slow (parallax)
+	var far_cloud := Color(cloud_col.lerp(top, 0.35), cloud_col.a * 0.8)
+	for i in 4:
+		var x := fmod(i * 410.0 + 120.0 + _t * 3.5, 1800.0) - 300.0
+		_draw_cloud(Vector2(x, 150 + fmod(i * 37.0, 60.0)), 0.42 + fmod(i * 0.21, 0.2), far_cloud, i + 7)
+	_draw_balloon(night, vivid)
+	_draw_birds(night)
 	for i in 5:
 		var speed := 8.0 + i * 3.0
 		var x := fmod(i * 330.0 + _t * speed, 1700.0) - 250.0
-		_draw_cloud(Vector2(x, 60 + fmod(i * 61.0, 150.0)), 0.7 + fmod(i * 0.37, 0.6), cloud_col)
+		_draw_cloud(Vector2(x, 60 + fmod(i * 61.0, 150.0)), 0.7 + fmod(i * 0.37, 0.6), cloud_col, i)
 
 	# Hills with aerial perspective: the far one is pale and bluish
 	var haze := Color("a6c8e0")
@@ -846,6 +1047,7 @@ func _draw() -> void:
 	mid = mid.lerp(mid.darkened(0.2), 1.0 - vivid)
 	near = near.lerp(near.darkened(0.15), 1.0 - vivid)
 	_draw_hill(325, 110, 0.004, 1.0, far)
+	_draw_windmill(Vector2(600, 277), far, night)
 	_draw_tree(Vector2(1070, 350), 0.72, night, vivid) # a little tree far away
 	_draw_hill(355, 70, 0.006, 2.3, mid)
 	_draw_hill(386, 30, 0.009, 4.1, mid2)
@@ -908,7 +1110,8 @@ func _draw() -> void:
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z + 3, st.z * 0.6 + 3), stone.darkened(0.45))
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z, st.z * 0.6), stone)
 		draw_arc(Vector2(st.x, st.y), st.z, PI + 0.3, TAU - 0.3, 10, Color(1, 1, 1, 0.35 * (1.0 - night)), 2.0)
-	_draw_can(Vector2(1010, 705), night)
+	if not _can_held:
+		_draw_can(self, CAN_HOME, night, 0.0, _can_hint())
 
 	# Beds: organic, different sizes, three depths
 	for i in BED_POSITIONS.size():
@@ -1050,6 +1253,14 @@ func _draw_front() -> void:
 	_front.draw_arc(BTN_PARENT + Vector2(0, -4), 8, PI, TAU, 12, Color("2f2a4a"), 4.0, true)
 	_front.draw_rect(Rect2(BTN_PARENT + Vector2(-11, -4), Vector2(22, 16)), Color("2f2a4a"))
 	_front.draw_circle(BTN_PARENT + Vector2(0, 3), 3, Color("fbf6ee"))
+	# help: a friendly question mark below the lock
+	var hp := BTN_HELP + Vector2(0, -absf(sin(_t * 2.0)) * 2.0 if _help_all <= 0.0 else 0.0)
+	_front.draw_circle(BTN_HELP + Vector2(0, 3), 24, Color(0, 0, 0, 0.15))
+	_front.draw_circle(hp, 24, Color("fff3a0") if _help_all > 0.0 else Color("fbf6ee"))
+	_front.draw_arc(hp, 24, 0, TAU, 32, Color("2f2a4a"), 3.0, true)
+	_front.draw_arc(hp + Vector2(0, -6), 8, PI * 0.95, PI * 2.45, 14, Color("2f2a4a"), 4.5, true)
+	_front.draw_line(hp + Vector2(0, 1), hp + Vector2(0, 6), Color("2f2a4a"), 4.5)
+	_front.draw_circle(hp + Vector2(0, 13), 3, Color("2f2a4a"))
 
 
 ## Front lip of one bed, drawn right after its being (same z) so the being
@@ -1220,22 +1431,41 @@ func _draw_pond(c: Vector2, sky: Color, night: float) -> void:
 		draw_arc(rc, 4 + ph * 18, 0, TAU, 20, Color(1, 1, 1, 0.5 * (1.0 - ph)), 1.5, true)
 
 
-func _draw_can(at: Vector2, night: float) -> void:
+func _draw_can(ci: CanvasItem, at: Vector2, night: float, rot := 0.0, glow := 0.0) -> void:
 	var c := Color("6fa8e8").lerp(Color("2a3558"), night * 0.8)
 	var ink := c.darkened(0.55)
-	draw_line(at + Vector2(30, -30), at + Vector2(74, -66), ink, 10.0)
-	draw_line(at + Vector2(30, -30), at + Vector2(74, -66), c, 6.0)
-	_draw_ellipse(at + Vector2(78, -68), Vector2(10, 6), c.lightened(0.2))
-	var body := PackedVector2Array([at + Vector2(-36, 0), at + Vector2(-30, -62), at + Vector2(32, -62), at + Vector2(36, 0)])
-	draw_colored_polygon(body, c)
+	ci.draw_set_transform(at, rot, Vector2.ONE)
+	var o := Vector2.ZERO
+	if glow > 0.0:
+		ci.draw_circle(o + Vector2(10, -35), 66 + sin(_t * 4.0) * 4.0, Color(1, 0.95, 0.6, 0.25 * glow))
+	ci.draw_line(o + Vector2(-30, -30), o + Vector2(-74, -66), ink, 10.0)
+	ci.draw_line(o + Vector2(-30, -30), o + Vector2(-74, -66), c, 6.0)
+	var rose := PackedVector2Array()
+	for k in 12:
+		var t := TAU * k / 12.0
+		rose.append(o + Vector2(-80, -70) + Vector2(cos(t) * 8, sin(t) * 13).rotated(-0.8))
+	ci.draw_colored_polygon(rose, c.lightened(0.2))
+	var body := PackedVector2Array([o + Vector2(-36, 0), o + Vector2(-30, -62), o + Vector2(32, -62), o + Vector2(36, 0)])
+	ci.draw_colored_polygon(body, c)
+	ci.draw_colored_polygon(PackedVector2Array([o + Vector2(-36, 0), o + Vector2(-33, -24), o + Vector2(34, -24), o + Vector2(36, 0)]), c.darkened(0.12))
 	var closed := body.duplicate()
 	closed.append(body[0])
-	draw_polyline(closed, ink, 3.0, true)
-	draw_arc(at + Vector2(0, -62), 24, PI, TAU, 16, ink, 6.0, true)
-	draw_circle(at + Vector2(-14, -40), 7, Color(1, 1, 1, 0.35))
+	ci.draw_polyline(closed, ink, 3.0, true)
+	ci.draw_arc(o + Vector2(0, -62), 24, PI, TAU, 16, ink, 6.0, true)
+	ci.draw_circle(o + Vector2(14, -42), 7, Color(1, 1, 1, 0.35))
+	ci.draw_set_transform(Vector2.ZERO)
 
 
 func _draw_overlay() -> void:
+	_draw_help()
+	for dr in _pour_drops:
+		if dr[2] > 0.0:
+			_overlay.draw_circle(dr[0], 6.5, Color(0.45, 0.72, 0.98, 0.95 - float(dr[2])))
+			_overlay.draw_circle(dr[0] + Vector2(-2, -2), 2.2, Color(1, 1, 1, 0.8 - float(dr[2])))
+	if _can_held:
+		var tilt := -0.55 * clampf(_pour * 3.0, 0.0, 1.0) if _pour > 0.0 else sin(_t * 3.0) * 0.06
+		_overlay.draw_circle(_can_pos + Vector2(0, 30), 40, Color(0, 0, 0, 0.12))
+		_draw_can(_overlay, _can_pos + Vector2(0, 30), 0.0, tilt)
 	for fl in _flashes:
 		var u: float = fl[1] / 0.12
 		_overlay.draw_circle(fl[0], 60.0 * minf(u, 1.0), Color(1, 1, 1, 0.5 * (1.0 - minf(fl[1] / 0.2, 1.0))))
@@ -1374,13 +1604,86 @@ func _draw_hill(base_y: float, amp: float, freq: float, ph: float, col: Color) -
 	draw_polyline(ridge, col.darkened(0.18), 3.0, true)
 
 
-func _draw_cloud(c: Vector2, k: float, col: Color) -> void:
-	var rim := Color(col.darkened(0.25), col.a * 0.6)
-	for b in [Vector3(-40, 0, 28), Vector3(-10, -16, 36), Vector3(26, -6, 30), Vector3(52, 6, 20), Vector3(0, 8, 30)]:
+## Picture-book cloud: puffs with a shaded belly, a flat bottom and a sunny top.
+func _draw_cloud(c: Vector2, k: float, col: Color, seed_i := 0) -> void:
+	var puffs := [Vector3(-46, 2, 26), Vector3(-16, -16, 34), Vector3(20, -24, 30), Vector3(50, -4, 24), Vector3(4, 4, 30), Vector3(72, 8, 16)]
+	if seed_i % 2 == 1:
+		puffs = [Vector3(-38, 0, 22), Vector3(-8, -12, 28), Vector3(26, -6, 26), Vector3(52, 6, 16)]
+	var rim := Color(col.darkened(0.22), col.a * 0.55)
+	var belly := Color(col.darkened(0.1).lerp(Color("b9c6e6"), 0.25), col.a)
+	for b in puffs:
 		draw_circle(c + Vector2(b.x, b.y) * k, b.z * k + 3.0, rim)
-	for b in [Vector3(-40, 0, 28), Vector3(-10, -16, 36), Vector3(26, -6, 30), Vector3(52, 6, 20), Vector3(0, 8, 30)]:
-		draw_circle(c + Vector2(b.x, b.y) * k, b.z * k, col)
-	draw_circle(c + Vector2(-14, -24) * k, 14 * k, Color(1, 1, 1, col.a * 0.4))
+	for b in puffs:
+		draw_circle(c + Vector2(b.x, b.y) * k, b.z * k, belly)
+	for b in puffs:
+		draw_circle(c + Vector2(b.x - 2, b.y - 6) * k, b.z * k * 0.86, col)
+	# flat, slightly shaded underside
+	draw_rect(Rect2(c + Vector2(-50, 10) * k, Vector2(110, 14) * k), belly)
+	draw_line(c + Vector2(-50, 24) * k, c + Vector2(60, 24) * k, rim, 2.0)
+	for b in puffs.slice(1, 3):
+		draw_circle(c + Vector2(b.x - 6, b.y - 14) * k, b.z * k * 0.35, Color(1, 1, 1, col.a * 0.45))
+
+
+## A little windmill on the far hill, slowly turning (faster with wind/rain).
+func _draw_windmill(base: Vector2, hill: Color, night: float) -> void:
+	var wall := Color("f3e6d0").lerp(hill, 0.35).lerp(Color("2a3558"), night * 0.7)
+	var roof := Color("c9674e").lerp(hill, 0.3).lerp(Color("2a3558"), night * 0.7)
+	var ink := wall.darkened(0.45)
+	var body := PackedVector2Array([base + Vector2(-13, 0), base + Vector2(-8, -42), base + Vector2(8, -42), base + Vector2(13, 0)])
+	draw_colored_polygon(body, wall)
+	draw_polyline(PackedVector2Array([body[0], body[1], body[2], body[3]]), ink, 1.5, true)
+	draw_colored_polygon(PackedVector2Array([base + Vector2(-11, -41), base + Vector2(0, -55), base + Vector2(11, -41)]), roof)
+	draw_rect(Rect2(base + Vector2(-3, -12), Vector2(6, 12)), ink)
+	if night > 0.3:
+		draw_circle(base + Vector2(0, -28), 3, Color(1, 0.85, 0.4, night))
+	var hub := base + Vector2(0, -44)
+	var spin := _t * (1.4 if weather == Weather.RAIN else 0.5)
+	for k in 4:
+		var a := spin + k * TAU / 4.0
+		var dir := Vector2.from_angle(a)
+		var side := dir.orthogonal() * 4.0
+		draw_line(hub, hub + dir * 30, ink, 2.0)
+		draw_colored_polygon(PackedVector2Array([hub + dir * 9, hub + dir * 30, hub + dir * 30 + side, hub + dir * 9 + side]), Color(wall.lightened(0.15), 0.95))
+	draw_circle(hub, 3, ink)
+
+
+## A flock of little birds crossing the sky now and then (by day only).
+func _draw_birds(night: float) -> void:
+	if night > 0.2 or weather == Weather.RAIN:
+		return
+	var period := 38.0
+	var u := fmod(_t + 9.0, period) / 14.0 # crossing takes 14 s, then a pause
+	if u > 1.0:
+		return
+	var lead := Vector2(lerpf(-80.0, 1360.0, u), 175.0 - sin(u * PI) * 50.0)
+	var ink := Color("3a3550", 0.75 * (1.0 - night * 4.0))
+	for i in 5:
+		var off := Vector2(-i * 26 - (i % 2) * 8, (i % 3) * 14 - 10 + i * 4)
+		var p := lead + off
+		var flap := sin(_t * 9.0 + i * 1.3) * 5.0
+		var w := 9.0 - i * 0.6
+		draw_polyline(PackedVector2Array([p + Vector2(-w, -flap), p + Vector2(-w * 0.4, -flap * 0.3 - 1), p, p + Vector2(w * 0.4, -flap * 0.3 - 1), p + Vector2(w, -flap)]), ink, 2.2, true)
+
+
+## A hot-air balloon drifting very slowly across the far sky.
+func _draw_balloon(night: float, vivid: float) -> void:
+	var x := fmod(_t * 6.0 + 900.0, 2200.0) - 300.0
+	if x > 1350.0:
+		return
+	var c := Vector2(x, 120.0 + sin(_t * 0.4) * 10.0)
+	var cols := [Color("ff8fb8"), Color("ffd45c"), Color("4cc3b5"), Color("ffd45c")]
+	var dim := night * 0.7 + (1.0 - vivid) * 0.3
+	var r := 22.0
+	draw_circle(c, r + 2, Color(Color("3a2e4a"), 0.6))
+	# gores: nested lens shapes, widest first
+	for k in 4:
+		var w := r * (1.0 - k * 0.27)
+		draw_colored_polygon(_ellipse_pts(c, Vector2(w, r), 28), cols[k].lerp(Color("2a3558"), dim))
+	draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.95, 4), c + Vector2(0, r * 1.45), c + Vector2(r * 0.95, 4)]), Color(cols[0].lerp(Color("2a3558"), dim).darkened(0.1)))
+	draw_line(c + Vector2(-6, r * 1.2), c + Vector2(-5, r * 1.75), Color("3a2e4a"), 1.2)
+	draw_line(c + Vector2(6, r * 1.2), c + Vector2(5, r * 1.75), Color("3a2e4a"), 1.2)
+	draw_rect(Rect2(c + Vector2(-6, r * 1.75), Vector2(12, 8)), Color("a0714a").lerp(Color("2a3558"), dim))
+	draw_circle(c + Vector2(-8, -10), 5, Color(1, 1, 1, 0.35 * (1.0 - dim)))
 
 
 func _draw_ellipse(c: Vector2, r: Vector2, col: Color) -> void:
@@ -1412,8 +1715,11 @@ func _open_parent_gate() -> void:
 
 func _on_settings_changed(s: Dictionary) -> void:
 	settings = s
+	if not settings.mic:
+		Audio.release_mic()
 	Audio.set_volume(settings.volume)
 	_apply_language()
+	_help_font = null
 	_save()
 
 

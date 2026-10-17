@@ -40,6 +40,9 @@ var bow_amt := 0.0
 var hop := 0.0
 var sing_amp := 0.0
 var sleeping := false
+var thirst := 0.0 ## 0 fresh .. 1 very thirsty: droops and fades until watered
+var _thirst_shown := 0.0
+var _drops: Array = [] ## [pos, vel, age] water splash
 
 var _t := randf() * 10.0
 var _sleep_blend := 0.0
@@ -173,6 +176,14 @@ func _process(delta: float) -> void:
 		_next_blink = randf_range(2.0, 5.0)
 	_blink = maxf(0.0, _blink - delta * 7.0)
 	_invite = maxf(0.0, _invite - delta)
+	_thirst_shown = move_toward(_thirst_shown, thirst, delta * 0.8)
+	var dry := clampf((_thirst_shown - 0.4) / 0.6, 0.0, 1.0)
+	modulate = Color.WHITE.lerp(Color(0.8, 0.76, 0.64), dry * 0.8)
+	for d in _drops:
+		d[2] += delta
+		d[0] += d[1] * delta
+		d[1].y += 520.0 * delta
+	_drops = _drops.filter(func(d): return d[2] < 0.9)
 	for n in _notes:
 		n[2] += delta
 		if n[2] > 0.0:
@@ -275,7 +286,9 @@ func _draw() -> void:
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.045 * (1.0 - _sleep_blend * 0.7)
 	var breath := 0.018 * sin(_t * 2.2) * (1.0 - _sleep_blend * 0.3) * (0.6 if not sleeping else 1.4)
 	var squash := 1.0 + 0.16 * sing_amp + 0.06 * beat_pulse + breath
-	var lean := sway + bow_amt * 0.45 + _look.x * 0.05
+	var droop := clampf((_thirst_shown - 0.4) / 0.6, 0.0, 1.0)
+	squash *= 1.0 - droop * 0.16
+	var lean := sway * (1.0 - droop * 0.6) + bow_amt * 0.45 + _look.x * 0.05 + droop * 0.22
 	draw_set_transform(Vector2(0, -hop * 40.0 - _bob * 8.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	match species:
 		Species.MUSHROOM: _draw_mushroom()
@@ -291,6 +304,11 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO)
 	if _sleep_blend > 0.5:
 		_draw_zzz()
+	elif droop > 0.3 and stage >= 2.0:
+		_draw_thirst_bubble(droop)
+	for d in _drops:
+		var al: float = 1.0 - float(d[2]) / 0.9
+		_drop(d[0], 7.0, Color(0.55, 0.8, 1.0, al))
 	for sp in _sparkles:
 		var k: float = 1.0 - float(sp[2])
 		_star(sp[0], 9.0 * k, Color(sp[3], k))
@@ -657,3 +675,29 @@ func _draw_zzz() -> void:
 		var size := int(20 + 16 * ph)
 		draw_string_outline(font, pos, "z", HORIZONTAL_ALIGNMENT_LEFT, -1, size, 6, Color(0.17, 0.14, 0.3, 1.0 - ph))
 		draw_string(font, pos, "z", HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1, 1, 1, 1.0 - ph))
+
+
+## A friendly thought bubble with a water drop: "I'm thirsty".
+func _draw_thirst_bubble(k: float) -> void:
+	var c := Vector2(48, -HEIGHTS[species] - 34 + sin(_t * 2.0) * 4.0)
+	var a := clampf(k, 0.0, 1.0)
+	draw_circle(c + Vector2(-24, 30), 5, Color(1, 1, 1, 0.85 * a))
+	draw_circle(c + Vector2(-14, 18), 8, Color(1, 1, 1, 0.85 * a))
+	draw_circle(c, 24, Color(INK, 0.55 * a))
+	draw_circle(c, 22, Color(1, 1, 1, 0.95 * a))
+	_drop(c + Vector2(0, 2), 11.0, Color(Color("4f9be0"), a))
+
+
+func _drop(c: Vector2, r: float, col: Color) -> void:
+	draw_circle(c, r, col)
+	draw_colored_polygon(PackedVector2Array([c + Vector2(-r * 0.92, -r * 0.4), c + Vector2(0, -r * 2.1), c + Vector2(r * 0.92, -r * 0.4)]), col)
+	draw_circle(c + Vector2(-r * 0.35, -r * 0.1), r * 0.25, Color(1, 1, 1, col.a * 0.7))
+
+
+## Watered: splash, a happy hop and a little growth spurt.
+func water() -> void:
+	thirst = 0.0
+	for i in 18:
+		var a := randf_range(-PI * 0.9, -PI * 0.1)
+		_drops.append([Vector2(randf_range(-30, 30), -HEIGHTS[species] * 0.6), Vector2(cos(a), sin(a)) * randf_range(80, 220), 0.0])
+	cheer()

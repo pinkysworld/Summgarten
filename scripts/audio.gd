@@ -25,7 +25,7 @@ func _ready() -> void:
 	AudioServer.set_bus_name(rec, "Record")
 	AudioServer.set_bus_mute(rec, true) # never echo the mic to the speakers
 	_capture = AudioEffectCapture.new()
-	_capture.buffer_length = 0.5
+	_capture.buffer_length = 1.0
 	AudioServer.add_bus_effect(rec, _capture)
 
 	var garden := AudioServer.bus_count
@@ -86,8 +86,11 @@ func set_volume(linear: float) -> void:
 
 func start_recording() -> void:
 	_buffer = PackedFloat32Array()
+	# Keep the microphone stream running once started: stopping and restarting
+	# AudioStreamMicrophone often yields only silence afterwards (macOS).
+	if not _mic_player.playing:
+		_mic_player.play()
 	_capture.clear_buffer()
-	_mic_player.play()
 	recording = true
 
 
@@ -95,9 +98,14 @@ func start_recording() -> void:
 func stop_recording() -> PackedFloat32Array:
 	_drain()
 	recording = false
-	_mic_player.stop()
 	level = 0.0
 	return _buffer
+
+
+## Fully releases the microphone (parents switched it off).
+func release_mic() -> void:
+	recording = false
+	_mic_player.stop()
 
 
 func mix_rate() -> int:
@@ -107,6 +115,8 @@ func mix_rate() -> int:
 func _process(_delta: float) -> void:
 	if recording:
 		_drain()
+	elif _mic_player.playing:
+		_capture.clear_buffer() # discard everything outside a recording
 
 
 func _drain() -> void:
