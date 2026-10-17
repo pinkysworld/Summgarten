@@ -605,12 +605,29 @@ func _eyes(at: Array, k: float) -> void:
 			draw_arc(e + Vector2(0, 3 * k), 7 * k, PI + 0.3, TAU - 0.3, 10, INK, 3.5, true)
 		elif _sleep_blend > 0.5 or _blink > 0.3 or yawn_amt > 0.4:
 			draw_arc(e, 6 * k, 0.2, PI - 0.2, 10, INK, 3.0, true)
+		elif _sad() > 0.35:
+			# tired, droopy eyes: lower half open, heavy lid, sad brow
+			var half := PackedVector2Array()
+			for j in 11:
+				half.append(e + Vector2.from_angle(PI * j / 10.0) * 9 * k)
+			draw_colored_polygon(half, Color.WHITE)
+			draw_circle(e + Vector2(0, 4 * k), 4.2 * k, INK)
+			var out := signf(e.x) if e.x != 0.0 else 1.0
+			draw_line(e + Vector2(-10 * k, 0), e + Vector2(10 * k, 0), INK, 3.0)
+			draw_line(e + Vector2(-9 * out * k, -13 * k), e + Vector2(7 * out * k, -9 * k), INK, 2.5)
 		else:
 			draw_circle(e, 9 * k, Color.WHITE)
 			draw_arc(e, 9 * k, 0, TAU, 20, INK, 2.0, true)
 			var pupil: Vector2 = e + Vector2(0, 1) + _look * 3.5 * k
 			draw_circle(pupil, 5.2 * k, INK)
 			draw_circle(pupil + Vector2(-1.8, -2.0) * k, 1.9 * k, Color.WHITE)
+
+
+## 0..1 how visibly thirsty (only when not happy or singing).
+func _sad() -> float:
+	if joy > 0.1 or sing_amp > 0.08:
+		return 0.0
+	return clampf((_thirst_shown - 0.4) / 0.6, 0.0, 1.0)
 
 
 func _cheeks(c: Vector2, k: float) -> void:
@@ -635,6 +652,8 @@ func _mouth(m: Vector2, k: float, wide := false) -> void:
 		draw_colored_polygon(_ell_pts(m + Vector2(0, (2 + 5 * sing_amp) * k), Vector2(w * 0.5, 3 * k), 0.0, 12), Color("ff7a8a"))
 	elif _sleep_blend > 0.5:
 		draw_circle(m, 3 * k, INK)
+	elif _sad() > 0.35:
+		draw_arc(m + Vector2(0, 8 * k), w, PI + 0.55, TAU - 0.55, 12, INK, 3.0, true)
 	else:
 		draw_arc(m + Vector2(0, -5 * k), w, 0.45, PI - 0.45, 12, INK, 3.0, true)
 
@@ -677,15 +696,20 @@ func _draw_zzz() -> void:
 		draw_string(font, pos, "z", HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1, 1, 1, 1.0 - ph))
 
 
-## A friendly thought bubble with a water drop: "I'm thirsty".
+## A big pulsing bubble with a water drop right above the head: "I'm thirsty".
 func _draw_thirst_bubble(k: float) -> void:
-	var c := Vector2(48, -HEIGHTS[species] - 34 + sin(_t * 2.0) * 4.0)
-	var a := clampf(k, 0.0, 1.0)
-	draw_circle(c + Vector2(-24, 30), 5, Color(1, 1, 1, 0.85 * a))
-	draw_circle(c + Vector2(-14, 18), 8, Color(1, 1, 1, 0.85 * a))
-	draw_circle(c, 24, Color(INK, 0.55 * a))
-	draw_circle(c, 22, Color(1, 1, 1, 0.95 * a))
-	_drop(c + Vector2(0, 2), 11.0, Color(Color("4f9be0"), a))
+	var a := clampf(k * 1.6, 0.0, 1.0)
+	var top: float = -HEIGHTS[species] - (40.0 if season != 1 else 22.0)
+	var pulse := 1.0 + 0.12 * (0.5 + 0.5 * sin(_t * 4.0))
+	var c := Vector2(10, top - 36 + sin(_t * 2.0) * 4.0)
+	var inv := Vector2(1.0 / maxf(scale.x, 0.01), 1.0 / maxf(scale.y, 0.01)) # keep the size readable on small beings
+	var r := 36.0 * pulse * inv.x
+	draw_circle(c + Vector2(-14, 36) * inv, 6 * inv.x, Color(1, 1, 1, 0.95 * a))
+	draw_circle(c + Vector2(-6, 24) * inv, 9 * inv.x, Color(1, 1, 1, 0.95 * a))
+	draw_circle(c, r + 4 * inv.x, Color(INK, 0.6 * a))
+	draw_circle(c, r, Color(1, 1, 1, a))
+	draw_circle(c, r - 5 * inv.x, Color(Color("d8eeff"), a))
+	_drop(c + Vector2(0, 6) * inv, 15.0 * pulse * inv.x, Color(Color("3d8fe0"), a))
 
 
 func _drop(c: Vector2, r: float, col: Color) -> void:

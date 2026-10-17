@@ -1137,6 +1137,16 @@ func _draw() -> void:
 		_draw_ellipse(b + Vector2(0, 4 * k), Vector2(102, 25) * k, soil)
 		for j in 6:
 			draw_circle(b + Vector2((-70 + j * 28) * k, (4 + (j % 2) * 7) * k), 3.5 * k, soil.lightened(0.15))
+		# dry, cracked soil when the being is thirsty
+		if beds[i] and beds[i].thirst > 0.5:
+			var dry := clampf((beds[i].thirst - 0.5) * 2.5, 0.0, 1.0)
+			_draw_ellipse(b + Vector2(0, 4 * k), Vector2(102, 25) * k, Color(Color("c8a27a"), 0.45 * dry))
+			for j in 5:
+				var x0 := (-80 + j * 38) * k
+				var crack := PackedVector2Array()
+				for q in 4:
+					crack.append(b + Vector2(x0 + q * 9 * k, (-6 + (q % 2) * 9 + (j % 2) * 5) * k))
+				draw_polyline(crack, Color(soil.darkened(0.5), dry), 2.2, true)
 		# little pebble rim
 		for j in 9:
 			var a := PI * 0.1 + PI * 0.8 * j / 8.0
