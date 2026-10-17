@@ -47,9 +47,9 @@ func _make_theme() -> Theme:
 	var th := Theme.new()
 	th.default_font = cjk_font()
 	for type in ["Button", "OptionButton"]:
-		th.set_stylebox("normal", type, _box_style(INK))
-		th.set_stylebox("hover", type, _box_style(INK.lightened(0.15)))
-		th.set_stylebox("pressed", type, _box_style(INK.darkened(0.2)))
+		th.set_stylebox("normal", type, _box_style(Color("efe5d2")))
+		th.set_stylebox("hover", type, _box_style(Color("f6eedf")))
+		th.set_stylebox("pressed", type, _box_style(Color("e0d3bb")))
 		th.set_stylebox("disabled", type, _box_style(Color("b9b4c4")))
 		var focus := StyleBoxFlat.new()
 		focus.draw_center = false
@@ -58,7 +58,7 @@ func _make_theme() -> Theme:
 		focus.set_corner_radius_all(14)
 		th.set_stylebox("focus", type, focus)
 		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
-			th.set_color(c, type, PAPER)
+			th.set_color(c, type, INK)
 		th.set_color("font_disabled_color", type, PAPER)
 	var track := _box_style(Color("e3ddd2"), 8)
 	track.content_margin_top = 6
@@ -159,6 +159,15 @@ func _button(text: String, cb: Callable) -> Button:
 	return b
 
 
+## The one main action per screen stays dark (ink stone with paper text).
+func _primary(b: Button) -> void:
+	b.add_theme_stylebox_override("normal", _box_style(INK))
+	b.add_theme_stylebox_override("hover", _box_style(INK.lightened(0.15)))
+	b.add_theme_stylebox_override("pressed", _box_style(INK.darkened(0.2)))
+	for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
+		b.add_theme_color_override(c, PAPER)
+
+
 func _show_gate() -> void:
 	_clear()
 	var a := randi_range(6, 9)
@@ -183,7 +192,7 @@ func _show_gate() -> void:
 			else:
 				queue_free())
 		row.add_child(btn)
-	_button(tr("BACK"), queue_free)
+	_primary(_button(tr("BACK"), queue_free))
 
 
 func _card() -> VBoxContainer:
@@ -365,5 +374,5 @@ func _show_settings() -> void:
 	var clr := _link(tr("RESET"))
 	clr.reparent(links)
 	_confirming(clr, tr("RESET_SURE"), tr("RESET_DONE"), clear_garden)
-	_button(tr("BACK"), queue_free)
+	_primary(_button(tr("BACK"), queue_free))
 	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)

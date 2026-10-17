@@ -98,7 +98,7 @@ func grow_in(duration := 1.4, stages := true) -> void:
 		_sparkles.append([Vector2(0, -30), Vector2(cos(a), sin(a) - 0.7) * randf_range(90, 240), 0.0, cols[i % 3]])
 
 
-func sing(shift: float) -> void:
+func sing(shift: float, note_count := 2) -> void:
 	Audio.play(stream, freq, shift)
 	sang.emit(self)
 	var tw := create_tween()
@@ -107,7 +107,7 @@ func sing(shift: float) -> void:
 	tw.parallel().tween_property(self, "sing_amp", 1.0, 0.08)
 	tw.tween_property(self, "sing_amp", 0.0, 0.6).set_trans(Tween.TRANS_SINE)
 	var top: float = -HEIGHTS[species] - 10.0
-	for i in 2:
+	for i in note_count:
 		_notes.append([Vector2(randf_range(-25, 25), top), Vector2(randf_range(-35, 35), -80), -i * 0.15, PALETTE[species]])
 
 
@@ -788,3 +788,4 @@ func water() -> void:
 		var a := randf_range(-PI * 0.9, -PI * 0.1)
 		_drops.append([Vector2(randf_range(-30, 30), -HEIGHTS[species] * 0.6), Vector2(cos(a), sin(a)) * randf_range(80, 220), 0.0])
 	cheer()
+	celebrate_hop(0.15)

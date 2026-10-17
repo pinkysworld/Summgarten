@@ -99,6 +99,7 @@ var _cam_target := Vector2(640, 360)
 var _cam_zoom := 1.0
 var _spots: Array = [] ## [world pos, alpha, width] spotlights on singers
 var _song_rings: Array = [] ## [age, colour] pond rings, one per sung note
+var _wet: Array = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0] ## per bed: freshly watered soil darkens, then dries
 var _beat_kick := 0.0 ## flowers and grass nod on the beat
 var _season_fade := 0.0 ## paper wash when the season changes
 const HELP_STEP := 4.0 ## seconds per bubble in the help tour
@@ -376,6 +377,8 @@ func _water_bed(i: int) -> void:
 	if was > 0.5:
 		d["size"] = minf(MAX_GROWTH, float(d.get("size", 0.0)) + 0.05)
 	d["water"] = 1.0
+	_wet[i] = 1.0
+	get_tree().create_timer(1.2).timeout.connect(_can_fly_home)
 	get_tree().create_timer(0.5).timeout.connect(func():
 		if is_instance_valid(c):
 			c.water()
@@ -383,6 +386,20 @@ func _water_bed(i: int) -> void:
 			c.sing(_shift()))
 	Audio.play_music(_plop, 7.0 + _shift(), 0.0)
 	_save()
+
+
+## After pouring, the can hops back onto its slab in a little arc.
+func _can_fly_home() -> void:
+	if not _can_held:
+		return
+	var from := _can_pos
+	var tw := create_tween()
+	tw.tween_method(func(u: float):
+		_can_pos = from.lerp(CAN_HOME + Vector2(0, -30), u) + Vector2(0, -sin(u * PI) * 90.0), 0.0, 1.0, 0.7).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(func():
+		_can_held = false
+		_can_pos = CAN_HOME
+		Audio.play_music(_plop, _shift() - 5.0, -4.0))
 
 
 func _apply_bed_scale(i: int, animate: bool) -> void:
@@ -475,13 +492,13 @@ func _concert() -> void:
 	var singers := beds.filter(func(c): return c != null)
 	# the stage: edges dim, the camera leans in
 	create_tween().tween_property(self, "_stage_light", 1.0, 0.6)
-	_cam_zoom = 1.035
+	_cam_zoom = 1.12
 	await get_tree().create_timer(0.5).timeout
 	# Round 1: one after another, like a melody; spotlight and camera follow.
 	for c in singers:
 		if is_instance_valid(c):
 			_spotlight(c)
-			_cam_target = Vector2(640, 360).lerp(c.global_position + Vector2(0, -80), 0.12)
+			_cam_target = Vector2(640, 360).lerp(c.global_position + Vector2(0, -80), 0.2)
 			c.sing(_shift())
 		await get_tree().create_timer(beat).timeout
 	# Round 2: in pairs, like little chords.
@@ -493,7 +510,7 @@ func _concert() -> void:
 				_spotlight(c)
 				mid += c.global_position / pair.size()
 				c.sing(_shift())
-		_cam_target = Vector2(640, 360).lerp(mid + Vector2(0, -80), 0.1)
+		_cam_target = Vector2(640, 360).lerp(mid + Vector2(0, -80), 0.15)
 		await get_tree().create_timer(beat).timeout
 	# Finale: everyone together, lights up, wide shot, then fireworks.
 	_cam_target = Vector2(640, 360)
@@ -502,7 +519,7 @@ func _concert() -> void:
 	for c in singers:
 		if is_instance_valid(c):
 			_spotlight(c)
-			c.sing(_shift())
+			c.sing(_shift(), 1)
 	_fireworks()
 	if weather == Weather.RAIN:
 		weather = Weather.NONE # the concert chases the rain away
@@ -656,13 +673,14 @@ func _fireworks() -> void:
 	var sets := [[Color("ff7a6b"), Color("ffc93c"), Color("fff3a0")], [Color("4cc3b5"), Color("6fa8e8"), Color("ffffff")],
 		[Color("9b6bd6"), Color("ff8fb8"), Color("ffe066")], [Color("7cc86a"), Color("ffc93c"), Color("ffffff")]]
 	var beat := 60.0 / _bpm()
-	for burst in 4:
-		var origin := Vector2(330 + [0, 2, 1, 3][burst] * 205, 140 + (burst % 2) * 50)
+	_rain_amount = minf(_rain_amount, 0.2) # clear the grey for the finale
+	for burst in 3:
+		var origin := Vector2(640 + [-170, 170, 0][burst], [190.0, 190.0, 130.0][burst])
 		var cols: Array = sets[burst]
-		for i in 24:
-			var a := TAU * i / 24.0
-			var size: float = [6.0, 9.0, 13.0][i % 3]
-			_confetti.append([origin, Vector2(cos(a), sin(a)) * (240.0 - size * 6.0), 0.0, cols[i % 3], 0.0, size])
+		for i in 36:
+			var a := TAU * i / 36.0
+			var size: float = [7.0, 10.0, 15.0][i % 3]
+			_confetti.append([origin, Vector2(cos(a), sin(a)) * (330.0 - size * 7.0), 0.0, cols[i % 3], 0.0, size])
 		_flashes.append([origin, 0.0])
 		_shake = 4.0
 		for c in beds:
@@ -838,6 +856,8 @@ func _process(delta: float) -> void:
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
 	_tick_water(delta)
 	_beat_kick = maxf(0.0, _beat_kick - delta * 4.0)
+	for i in _wet.size():
+		_wet[i] = maxf(0.0, _wet[i] - delta * 0.4)
 	for r in _song_rings:
 		r[0] += delta
 	_song_rings = _song_rings.filter(func(r): return r[0] < 2.2)
@@ -1178,7 +1198,7 @@ func _draw() -> void:
 	else:
 		var sun_c := Vector2(560, lerpf(70.0, 330.0, ev))
 		var sun_col := Color("ffe27a").lerp(Color("ff8a4a"), ev)
-		sun_col.a = lerpf(0.3, 0.75, vivid) # pale: the sun *button* is the one to tap
+		sun_col.a = lerpf(0.1, 0.75, vivid) # pale: the sun *button* is the one to tap; rain hides it
 		if season == Season.WINTER:
 			sun_col = Color(sun_col.lerp(Color.WHITE, 0.55), sun_col.a * 0.8)
 		for k in 3:
@@ -1315,6 +1335,9 @@ func _draw() -> void:
 		_draw_ellipse(b + Vector2(0, 4 * k), Vector2(102, 25) * k, soil)
 		for j in 6:
 			draw_circle(b + Vector2((-70 + j * 28) * k, (4 + (j % 2) * 7) * k), 3.5 * k, soil.lightened(0.15))
+		if _wet[i] > 0.0:
+			_draw_ellipse(b + Vector2(0, 4 * k), Vector2(102, 25) * k, Color(0.15, 0.07, 0.05, 0.35 * _wet[i]))
+			draw_arc(b + Vector2(-30, -2) * k, 22 * k, PI + 0.3, TAU - 0.3, 10, Color(1, 1, 1, 0.35 * _wet[i]), 2.0)
 		# dry, cracked soil when the being is thirsty
 		if beds[i] and beds[i].thirst > 0.5:
 			var dry := clampf((beds[i].thirst - 0.5) * 2.5, 0.0, 1.0)
@@ -1414,8 +1437,8 @@ func _draw_front() -> void:
 		for r in _rain:
 			_front.draw_line(r, r + Vector2(-6, 18), Color(0.85, 0.9, 1.0, 0.6), 2.0)
 
-	if hide_ui:
-		return
+	if hide_ui or state == State.CONCERT:
+		return # during the concert the stage belongs to the singers
 	# Buttons: thick icons on coloured discs
 	var can_concert := _creature_count() >= 3 and state == State.DAY
 	_draw_button(BTN_CONDUCTOR, Color("ff8a7a"), can_concert, state == State.CONCERT)
@@ -1549,6 +1572,7 @@ func _tick_light() -> void:
 	var ev := _evening()
 	var night := clampf(ev * 2.0 - 1.0, 0.0, 1.0)
 	var dusk := clampf(ev * 2.0, 0.0, 1.0) * (1.0 - night)
+	dusk = maxf(dusk, _stage_light * 0.45)
 	var tint := Color.WHITE.lerp(Color(1.0, 0.86, 0.74), dusk * 0.7).lerp(Color(0.6, 0.66, 0.92), night * 0.75)
 	if _paper_mat:
 		# season and time of day grade the whole picture, sky and ground included
@@ -1559,7 +1583,7 @@ func _tick_light() -> void:
 		_paper_mat.set_shader_parameter("grade_shadow", sh)
 		_paper_mat.set_shader_parameter("grade_light", li)
 		_paper_mat.set_shader_parameter("grade_amount", 1.0)
-		_paper_mat.set_shader_parameter("vignette", 1.0 + _stage_light * 1.6)
+		_paper_mat.set_shader_parameter("vignette", 1.0 + _stage_light * 3.0)
 	for c in beds:
 		if c:
 			c.light = tint
@@ -1764,6 +1788,8 @@ func _draw_can(ci: CanvasItem, at: Vector2, night: float, rot := 0.0, glow := 0.
 
 func _draw_overlay() -> void:
 	_draw_spots()
+	if state == State.ECHO and not _echo_listen:
+		_draw_echo_badge()
 	if _season_fade > 0.0:
 		_overlay.draw_rect(Rect2(-100, -100, 1480, 920), Color(0.99, 0.97, 0.92, 0.85 * _season_fade * _season_fade))
 	_draw_help()
@@ -1821,7 +1847,25 @@ func _draw_spots() -> void:
 		for k in 3:
 			var ww := w * (1.0 + k * 0.25)
 			_overlay.draw_colored_polygon(PackedVector2Array([top + Vector2(-14 - k * 8, 0), top + Vector2(14 + k * 8, 0), p + Vector2(ww, 10), p + Vector2(-ww, 10)]), Color(1, 0.95, 0.75, 0.11 * a))
-		_overlay.draw_colored_polygon(_ellipse_pts(p + Vector2(0, 6), Vector2(w * 1.1, 26), 32), Color(1, 0.95, 0.7, 0.22 * a))
+		for k in 3:
+			_overlay.draw_colored_polygon(_ellipse_pts(p + Vector2(0, 6), Vector2(w * (1.25 - k * 0.15), 30 - k * 4), 32), Color(1, 0.93, 0.65, 0.14 * a))
+
+
+## Echo game: a badge at the top says "listen" (ear + notes) while the
+## beings sing, and "your turn" (tapping hand) while they wait.
+func _draw_echo_badge() -> void:
+	var c := Vector2(640, 92)
+	var pulse := 1.0 + 0.06 * sin(_t * 5.0)
+	_overlay.draw_circle(c + Vector2(0, 6), 50 * pulse, Color(0, 0, 0, 0.18))
+	_overlay.draw_circle(c, 50 * pulse, Color("3a2e4a"))
+	_overlay.draw_circle(c, 44 * pulse, Color("b58cf0") if not _echo_waiting else Color("fff3a0"))
+	if _echo_waiting:
+		_draw_tap_hand(c + Vector2(-14, -22), fmod(_t, 2.0), 1.0)
+	else:
+		_overlay.draw_arc(c + Vector2(-6, 0), 18, -PI * 0.6, PI * 0.75, 16, Color("2f2a4a"), 6.0, true)
+		_overlay.draw_arc(c + Vector2(-6, 0), 8, -PI * 0.5, PI * 0.5, 10, Color("2f2a4a"), 4.0, true)
+		for k in 2:
+			_help_note(c + Vector2(18 + k * 14, -10 - sin(_t * 4.0 + k) * 5.0), 1.0)
 
 
 func _small_stone(c: Vector2, col: Color) -> void:
