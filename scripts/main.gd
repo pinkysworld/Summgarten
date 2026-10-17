@@ -83,6 +83,8 @@ var _overlay := Node2D.new()
 
 func _ready() -> void:
 	randomize()
+	if "--windowed" in OS.get_cmdline_args():
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	beds.resize(BED_POSITIONS.size())
 	bed_data.resize(BED_POSITIONS.size())
 	for i in 80:
@@ -852,6 +854,14 @@ func _draw() -> void:
 			draw_circle(fp + Vector2.from_angle(q * PI / 2) * r, r * 0.8, fc.lerp(tuft, night * 0.7))
 		draw_circle(fp, r * 0.6, Color("ffc93c").lerp(tuft, night * 0.7))
 
+	# Cloud shadows drifting over the meadow
+	if weather != Weather.RAIN and night < 0.5:
+		for i in 3:
+			var x := fmod(i * 520.0 + _t * (10.0 + i * 3.0), 1900.0) - 300.0
+			draw_colored_polygon(_ellipse_pts(Vector2(x, 470 + i * 90), Vector2(170, 34)), Color(0.1, 0.2, 0.15, 0.07 * (1.0 - dusk)))
+
+	_draw_pond(Vector2(1150, 505), top, night)
+
 	# Stones and the watering can
 	for st in [Vector3(560, 470, 14), Vector3(745, 520, 18), Vector3(470, 600, 12), Vector3(820, 615, 16)]:
 		var stone := Color("c9c2b8").lerp(Color("3b3d55"), night * 0.8)
@@ -918,8 +928,17 @@ func _draw() -> void:
 			_draw_ellipse(bp + Vector2(8 * flap, 0), Vector2(9 * flap + 1, 11), bc)
 			draw_line(bp + Vector2(0, -7), bp + Vector2(0, 7), Color("3a2f40"), 2.5)
 
+	var warm := dusk * (1.0 - night)
+	if warm > 0.0:
+		_gradient_rect(Rect2(-2000, 0, 5280, 800), Color(1.0, 0.55, 0.25, 0.14 * warm), Color(1.0, 0.45, 0.3, 0.04 * warm))
 	if ev > 0.0:
 		draw_rect(Rect2(-2000, -2000, 5280, 4720), Color(0.05, 0.05, 0.2, ev * 0.22))
+	# pollen motes floating in the sunlight
+	if state != State.NIGHT and weather != Weather.RAIN and (season == Season.SPRING or season == Season.SUMMER):
+		for i in 24:
+			var mp := Vector2(fmod(i * 173.0 + _t * (6.0 + i % 4), 1320.0) - 20, 200 + fmod(i * 97.0, 420.0) + sin(_t * 0.7 + i) * 18.0)
+			var tw := 0.5 + 0.5 * sin(_t * 2.0 + i * 1.3)
+			draw_circle(mp, 2.2, Color(1, 0.97, 0.75, 0.55 * tw * (1.0 - dusk)))
 
 
 ## Foreground layer above the beings: framing leaves, rain, buttons.
@@ -1085,6 +1104,53 @@ func _draw_fence(at: Vector2, night: float) -> void:
 		var closed := pts.duplicate()
 		closed.append(pts[0])
 		draw_polyline(closed, line, 2.0, true)
+
+
+func _ellipse_pts(c: Vector2, r: Vector2, n := 32) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in n:
+		var a := TAU * i / n
+		pts.append(c + Vector2(cos(a) * r.x, sin(a) * r.y))
+	return pts
+
+
+func _draw_pond(c: Vector2, sky: Color, night: float) -> void:
+	var frozen := season == Season.WINTER
+	var rim := Color("9c8f7e").lerp(Color("2a2a40"), night * 0.8)
+	draw_colored_polygon(_ellipse_pts(c + Vector2(0, 3), Vector2(98, 30)), rim.darkened(0.3))
+	draw_colored_polygon(_ellipse_pts(c, Vector2(94, 27)), rim)
+	var water := Color("5fb7d9").lerp(sky, 0.35).lerp(Color("1b2a50"), night * 0.8)
+	if frozen:
+		water = Color("cfe7f3").lerp(Color("3b4a70"), night * 0.8)
+	draw_colored_polygon(_ellipse_pts(c + Vector2(0, 2), Vector2(84, 21)), water.darkened(0.12))
+	draw_colored_polygon(_ellipse_pts(c + Vector2(0, -1), Vector2(80, 18)), water)
+	# sky reflection streaks
+	for k in 3:
+		var y := c.y - 6 + k * 6
+		var w := 46.0 - k * 10.0
+		var shift := sin(_t * 0.8 + k) * 6.0
+		draw_line(Vector2(c.x - w + shift, y), Vector2(c.x + w * 0.4 + shift, y), Color(1, 1, 1, 0.35 if not frozen else 0.7), 2.5, true)
+	if frozen:
+		return
+	# lily pads with a blossom
+	for lp in [Vector3(-40, 4, 15), Vector3(28, -5, 12), Vector3(52, 8, 10)]:
+		var pc := c + Vector2(lp.x, lp.y)
+		var pad := PackedVector2Array([pc])
+		for i in 15:
+			var a := 0.35 + (TAU - 0.7) * i / 14.0
+			pad.append(pc + Vector2(cos(a) * lp.z, sin(a) * lp.z * 0.45))
+		draw_colored_polygon(pad, Color("5fa14a").lerp(Color("15302a"), night))
+	if season != Season.AUTUMN:
+		for i in 5:
+			var a := TAU * i / 5.0
+			draw_circle(c + Vector2(-40, -1) + Vector2(cos(a) * 5, sin(a) * 2.5), 4.0, Color("ffc1da").lerp(Color("3b3f7a"), night * 0.6))
+		draw_circle(c + Vector2(-40, -2), 2.5, Color("ffd84d"))
+	# ripples: rain drops or a gentle periodic ring
+	var rings := 3 if weather == Weather.RAIN else 1
+	for i in rings:
+		var ph := fmod(_t * (0.9 if rings > 1 else 0.35) + i * 0.37, 1.0)
+		var rc := c + Vector2(fmod(i * 47.0 + floor(_t * 0.9 + i * 0.37) * 31.0, 110.0) - 55.0, fmod(i * 13.0, 14.0) - 7.0)
+		draw_arc(rc, 4 + ph * 18, 0, TAU, 20, Color(1, 1, 1, 0.5 * (1.0 - ph)), 1.5, true)
 
 
 func _draw_can(at: Vector2, night: float) -> void:
