@@ -28,8 +28,20 @@ func _box_style(bg: Color, radius := 12) -> StyleBoxFlat:
 	return st
 
 
+## Default font plus bundled Noto Sans SC/JP so Chinese and Japanese render
+## everywhere (SteamOS has no CJK system fonts).
+static func cjk_font(base: Font = null) -> Font:
+	var f: Font = (base if base else ThemeDB.fallback_font).duplicate()
+	var fb: Array[Font] = [load("res://fonts/NotoSansSC-Bold-subset.otf"), load("res://fonts/NotoSansJP-Bold-subset.otf")]
+	if TranslationServer.get_locale().begins_with("ja"):
+		fb.reverse()
+	f.fallbacks = fb
+	return f
+
+
 func _make_theme() -> Theme:
 	var th := Theme.new()
+	th.default_font = cjk_font()
 	for type in ["Button", "OptionButton"]:
 		th.set_stylebox("normal", type, _box_style(INK))
 		th.set_stylebox("hover", type, _box_style(INK.lightened(0.15)))

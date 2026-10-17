@@ -1,0 +1,9 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://addons/minh_studio_intro/minh_studio_intro.gd" id="1"]
+[ext_resource type="Resource" path="res://addons/minh_studio_intro/presets/neutral_hell.tres" id="2"]
+
+[node name="MinhStudioIntro" type="CanvasLayer"]
+layer = 95
+script = ExtResource("1")
+theme = ExtResource("2")

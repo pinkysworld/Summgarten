@@ -18,6 +18,12 @@ Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen un
 - Elternbereich (kleiner Kreis oben rechts) hinter Rechenaufgabe: Mikrofon an/aus, Lautstärke, Tageslänge (4/6/10 min), Konzert als WAV in „Dokumente“ speichern, Aufnahmen löschen, Garten leeren
 - Keine Texte im Kinderbereich, nur Klicken (kein Ziehen), Touch funktioniert
 
+## Studio-Intro
+`addons/minh_studio_intro` (aus Kontor übernommen), Preset `presets/klanggarten.tres`. Läuft beim ersten Start in voller Länge, danach kurz; überspringbar mit jeder Taste, Berührung oder Pad-Taste.
+
+## Schriften
+Noto Sans SC/JP (OFL, `fonts/OFL-NotoSansCJK.txt`) auf die genutzten Zeichen reduziert (~150 KB). Bei neuen Übersetzungen neu reduzieren (siehe Commit-Historie, `fontTools.subset`).
+
 ## Inhalte (seit 2.0)
 - **Nachsing-Spiel** (Sprechblasen-Knopf): Wesen singen eine Folge vor, das Kind singt nach (Mikrofon) oder tippt die Wesen in der richtigen Reihenfolge an. 3 Runden, ohne Scheitern
 - **Vier Jahreszeiten**: Landschaft, Bäume, Blüten, Laub oder Schnee, Accessoires der Wesen. Wechselt jeden Tag oder fest im Elternbereich

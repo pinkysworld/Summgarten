@@ -25,6 +25,8 @@ func _ready() -> void:
 	await get_tree().process_frame
 	main._clear_garden()
 	main.settings.mic = false
+	main.screenshot_mode = true
+	main.set_season(1)
 	main.settings.lang = lang
 	main._apply_language()
 	var layer := CanvasLayer.new()
@@ -167,6 +169,7 @@ func _shots() -> void:
 		l.add_theme_color_override("font_color", Color("2f2a4a"))
 		var sf := SystemFont.new()
 		sf.font_names = PackedStringArray(["Arial Rounded MT Bold", "Arial"])
+		sf.fallbacks = [load("res://fonts/NotoSansSC-Bold-subset.otf"), load("res://fonts/NotoSansJP-Bold-subset.otf")]
 		l.add_theme_font_override("font", sf)
 		card.add_child(l)
 		row.add_child(card)

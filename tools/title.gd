@@ -14,6 +14,7 @@ func _ready() -> void:
 	var sf := SystemFont.new()
 	sf.font_names = PackedStringArray(["Arial Rounded MT Bold", "Chalkboard SE", "Comic Sans MS", "Arial"])
 	sf.font_weight = 800
+	sf.fallbacks = [load("res://fonts/NotoSansSC-Bold-subset.otf"), load("res://fonts/NotoSansJP-Bold-subset.otf")]
 	font = sf
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 

@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="MinhIntroTheme" load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://addons/minh_studio_intro/minh_intro_theme.gd" id="1"]
+[ext_resource type="FontFile" path="res://addons/minh_studio_intro/fonts/InterDisplay-SemiBold.ttf" id="2"]
+[ext_resource type="FontFile" path="res://addons/minh_studio_intro/fonts/Inter-SemiBold.ttf" id="3"]
+[ext_resource type="AudioStream" path="res://addons/minh_studio_intro/audio/key_tap_1.ogg" id="4"]
+[ext_resource type="AudioStream" path="res://addons/minh_studio_intro/audio/key_tap_2.ogg" id="5"]
+[ext_resource type="AudioStream" path="res://addons/minh_studio_intro/audio/key_tap_3.ogg" id="6"]
+[ext_resource type="AudioStream" path="res://addons/minh_studio_intro/audio/close_warm.ogg" id="7"]
+
+[resource]
+script = ExtResource("1")
+background = Color(0.984, 0.965, 0.933, 1)
+ink = Color(0.184, 0.165, 0.29, 1)
+sub_ink = Color(0.42, 0.4, 0.5, 1)
+accent = Color(0.298, 0.765, 0.71, 1)
+sign_fill = Color(0.184, 0.165, 0.29, 1)
+sign_loop = Color(0.984, 0.965, 0.933, 1)
+segment_from = Color(0.298, 0.765, 0.71, 1)
+segment_to = Color(1.0, 0.788, 0.235, 1)
+caret = Color(0.298, 0.765, 0.71, 1)
+paper = true
+paper_edge = Color(0.89, 0.867, 0.824, 1)
+ink_tooth = 0.2
+wordmark_font = ExtResource("2")
+sub_font = ExtResource("3")
+key_sounds = Array[AudioStream]([ExtResource("4"), ExtResource("5"), ExtResource("6")])
+close_sound = ExtResource("7")
+audio_bus = &"Garden"

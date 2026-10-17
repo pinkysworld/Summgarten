@@ -7,11 +7,13 @@ const ParentPanel := preload("res://scripts/parent_panel.gd")
 const SAVE_PATH := "user://garden.json"
 ## Organic layout on three depths: back, middle, front.
 const BED_POSITIONS := [
-	Vector2(410, 462), Vector2(875, 455),
-	Vector2(195, 585), Vector2(1080, 580),
-	Vector2(495, 695), Vector2(805, 690),
+	Vector2(330, 455), Vector2(985, 448),
+	Vector2(150, 590), Vector2(1125, 585),
+	Vector2(515, 695), Vector2(800, 690),
 ]
-const BED_SCALE := [0.95, 0.97, 1.1, 1.12, 1.18, 1.2]
+const BED_SCALE := [0.9, 0.9, 1.04, 1.04, 1.14, 1.14]
+## Tall or wide species are toned down so neighbours never cover each other.
+const SPECIES_SCALE := [1.0, 1.0, 0.95, 1.0, 1.0, 0.85, 0.92, 0.9, 0.86]
 const BTN_CONDUCTOR := Vector2(95, 95)
 const BTN_SUN := Vector2(1035, 95)
 const BTN_RAIN := Vector2(1170, 95)
@@ -28,7 +30,7 @@ const SEASONS := [
 	[Color("8fd16a"), Color("86cf6c"), Color("7cc862"), Color("a8dc90"), Color("7cc86a"), Color("ffb3d1"), Color("ecd6a8"), 70],
 	[Color("7fbd5a"), Color("7cc260"), Color("6db654"), Color("9bd47a"), Color("5fa14a"), Color("ff7a6b"), Color("e9d3a6"), 40],
 	[Color("b5b25a"), Color("c9a24a"), Color("b8913e"), Color("d6b884"), Color("e08a3c"), Color("c0392b"), Color("dcc59a"), 8],
-	[Color("eef3f8"), Color("e3ebf3"), Color("d7e1ec"), Color("f2f6fa"), Color("3f6b55"), Color("ffffff"), Color("c9d3de"), 0],
+	[Color("f4f1ec"), Color("dce6f0"), Color("c8d6e6"), Color("e6edf5"), Color("3f6b55"), Color("ffffff"), Color("cdd6e2"), 0],
 ]
 
 var state := State.DAY
@@ -64,6 +66,8 @@ var _flashes: Array = [] ## [pos, age]
 var _shake := 0.0
 var hide_ui := false
 var _pad_active := false
+var screenshot_mode := false ## store/trailer captures: no automatic season change
+var _bed_fronts: Array[Node2D] = []
 var _focus := 4
 var _stick_time := -1.0
 # Echo game ("sing it back")
@@ -81,10 +85,29 @@ var _season_parts: Array = [] ## falling petals / leaves / snow: [pos, phase] ##
 var _overlay := Node2D.new()
 
 
+## Minh Nguyen Studios intro: full on the very first start, short afterwards.
+## Skipped when the garden runs inside a test or tool scene.
+func _studio_intro() -> void:
+	if get_tree().current_scene != self or screenshot_mode:
+		return
+	var first: bool = not settings.get("intro_seen", false)
+	var intro := MinhStudioIntro.play(self, load("res://addons/minh_studio_intro/presets/klanggarten.tres"),
+		MinhStudioIntro.Mode.FULL if first else MinhStudioIntro.Mode.SHORT)
+	settings.intro_seen = true
+	_save()
+	await intro.fade_started
+
+
+## Deeper beds draw behind; a bed's front lip shares its being's z and is added later.
+func _bed_z(i: int) -> int:
+	return int(BED_POSITIONS[i].y / 40.0) - 8
+
+
 func _ready() -> void:
 	randomize()
-	if "--windowed" in OS.get_cmdline_args():
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+	# Full screen for players; tests and tools pass --windowed.
+	if not "--windowed" in OS.get_cmdline_args() and not OS.has_feature("editor"):
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
 	beds.resize(BED_POSITIONS.size())
 	bed_data.resize(BED_POSITIONS.size())
 	for i in 80:
@@ -105,6 +128,13 @@ func _ready() -> void:
 	rect.material = mat
 	paper.add_child(rect)
 	add_child(paper)
+	for i in BED_POSITIONS.size():
+		var bf := Node2D.new()
+		bf.position = BED_POSITIONS[i]
+		bf.z_index = _bed_z(i)
+		bf.draw.connect(_draw_bed_front.bind(bf, i))
+		add_child(bf)
+		_bed_fronts.append(bf)
 	_front.z_index = 9
 	_front.draw.connect(_draw_front)
 	add_child(_front)
@@ -116,6 +146,7 @@ func _ready() -> void:
 	_apply_language()
 	_apply_season()
 	_apply_season()
+	await _studio_intro()
 	_greet()
 
 
@@ -305,10 +336,13 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 	var c := Creature.new()
 	c.position = BED_POSITIONS[i]
 	c.scale = Vector2.ONE * BED_SCALE[i]
-	c.z_index = int(BED_POSITIONS[i].y / 100.0) - 3 # deeper beds behind
+	c.z_index = _bed_z(i)
+	c.scale *= SPECIES_SCALE[c.species]
 	c.setup(pitch, loud, wav, freq)
 	c.season = season
 	add_child(c)
+	if i < _bed_fronts.size():
+		move_child(_bed_fronts[i], -1) # lip right after its being
 	beds[i] = c
 	c.sang.connect(_on_sang)
 	if fresh:
@@ -645,7 +679,8 @@ func _go_to_sleep() -> void:
 func _wake_up() -> void:
 	state = State.DAY
 	day_time = 0.0
-	_auto_season = (_auto_season + 1) % 4
+	if not screenshot_mode:
+		_auto_season = (_auto_season + 1) % 4
 	_apply_season()
 	_save()
 	for c in beds:
@@ -697,6 +732,8 @@ func _process(delta: float) -> void:
 	queue_redraw()
 	_overlay.queue_redraw()
 	_front.queue_redraw()
+	for bf in _bed_fronts:
+		bf.queue_redraw()
 
 
 func _tick_ambience(delta: float) -> void:
@@ -756,8 +793,11 @@ func _draw() -> void:
 	var vivid := clampf(1.0 - _rain_mood(), 0.0, 1.0) # rain greys the world, the rainbow brings colour back
 	var top := Color("6cbbe8").lerp(Color("7b6fc4"), dusk).lerp(Color("1e2246"), night)
 	var bottom := Color("e8f4f8").lerp(Color("ffb36b"), dusk).lerp(Color("3b3f7a"), night)
-	top = top.lerp(Color("6f7c8c"), 0.55 * (1.0 - vivid))
-	bottom = bottom.lerp(Color("b4bec9"), 0.5 * (1.0 - vivid))
+	if season == Season.WINTER:
+		top = top.lerp(Color("a9cbe6"), 0.6 * (1.0 - dusk))
+		bottom = bottom.lerp(Color("f6e3d0"), 0.6 * (1.0 - dusk))
+	top = top.lerp(Color("6f7c8c"), 0.35 * (1.0 - vivid))
+	bottom = bottom.lerp(Color("b4bec9"), 0.3 * (1.0 - vivid))
 	if weather == Weather.SUN:
 		bottom = bottom.lerp(Color("fff4c2"), 0.4)
 	_gradient_rect(Rect2(-2000, -2000, 5280, 2000), top, top)
@@ -806,15 +846,15 @@ func _draw() -> void:
 	mid = mid.lerp(mid.darkened(0.2), 1.0 - vivid)
 	near = near.lerp(near.darkened(0.15), 1.0 - vivid)
 	_draw_hill(325, 110, 0.004, 1.0, far)
-	_draw_tree(Vector2(1150, 352), 0.75, night, vivid) # a little tree far away
+	_draw_tree(Vector2(1070, 350), 0.72, night, vivid) # a little tree far away
 	_draw_hill(355, 70, 0.006, 2.3, mid)
 	_draw_hill(386, 30, 0.009, 4.1, mid2)
 	_gradient_rect(Rect2(-2000, 385, 5280, 2400), near.lightened(0.06), Color("5fa14a").lerp(near, 0.4 + night * 0.6).darkened(0.08))
 	draw_rect(Rect2(-2000, 2785, 5280, 2000), near.darkened(0.12))
 
 	# Mid-ground: big tree on the left, fence on the right
-	_draw_tree(Vector2(90, 470), 1.25, night, vivid)
-	_draw_fence(Vector2(1000, 425), night)
+	_draw_tree(Vector2(232, 440), 1.1, night, vivid)
+	_draw_fence(Vector2(690, 418), night)
 
 	# Winding path from the front into the garden
 	var path_col: Color = sc[6].lerp(Color("4a4560"), night * 0.8).lerp(Color("bfae8c"), 1.0 - vivid)
@@ -837,7 +877,7 @@ func _draw() -> void:
 
 	# Grass tufts and tiny flowers (deterministic)
 	var tuft := near.darkened(0.22) if season != Season.WINTER else Color("b9c8d8").lerp(Color("2a3558"), night)
-	for i in 70:
+	for i in 34:
 		var gp := Vector2(fmod(i * 157.0, 1320.0) - 20, 400 + fmod(i * 89.0, 320.0))
 		var sway := sin(_t * 1.3 + i) * 3.0
 		for k in 3:
@@ -860,7 +900,7 @@ func _draw() -> void:
 			var x := fmod(i * 520.0 + _t * (10.0 + i * 3.0), 1900.0) - 300.0
 			draw_colored_polygon(_ellipse_pts(Vector2(x, 470 + i * 90), Vector2(170, 34)), Color(0.1, 0.2, 0.15, 0.07 * (1.0 - dusk)))
 
-	_draw_pond(Vector2(1150, 505), top, night)
+	_draw_pond(Vector2(1165, 478), top, night)
 
 	# Stones and the watering can
 	for st in [Vector3(560, 470, 14), Vector3(745, 520, 18), Vector3(470, 600, 12), Vector3(820, 615, 16)]:
@@ -868,7 +908,7 @@ func _draw() -> void:
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z + 3, st.z * 0.6 + 3), stone.darkened(0.45))
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z, st.z * 0.6), stone)
 		draw_arc(Vector2(st.x, st.y), st.z, PI + 0.3, TAU - 0.3, 10, Color(1, 1, 1, 0.35 * (1.0 - night)), 2.0)
-	_draw_can(Vector2(1165, 650), night)
+	_draw_can(Vector2(1010, 705), night)
 
 	# Beds: organic, different sizes, three depths
 	for i in BED_POSITIONS.size():
@@ -879,7 +919,7 @@ func _draw() -> void:
 		var soil := Color("7a4a2e").lerp(Color("2a2430"), ev * 0.6)
 		if season == Season.WINTER:
 			soil = Color("8a6a55").lerp(Color("2a2430"), ev * 0.6)
-		_draw_ellipse(b + Vector2(0, 14 * k), Vector2(118, 34) * k, Color(0, 0, 0, 0.12))
+		_draw_ellipse(b + Vector2(0, 14 * k), Vector2(118, 34) * k, Color("9fb3cc", 0.35) if season == Season.WINTER else Color(0, 0, 0, 0.12))
 		_draw_ellipse(b + Vector2(0, 8 * k), Vector2(112, 32) * k, soil.darkened(0.3))
 		_draw_ellipse(b + Vector2(0, 4 * k), Vector2(102, 25) * k, soil)
 		for j in 6:
@@ -934,7 +974,7 @@ func _draw() -> void:
 	if ev > 0.0:
 		draw_rect(Rect2(-2000, -2000, 5280, 4720), Color(0.05, 0.05, 0.2, ev * 0.22))
 	# pollen motes floating in the sunlight
-	if state != State.NIGHT and weather != Weather.RAIN and (season == Season.SPRING or season == Season.SUMMER):
+	if state != State.NIGHT and weather != Weather.RAIN and season == Season.SUMMER and _confetti.is_empty():
 		for i in 24:
 			var mp := Vector2(fmod(i * 173.0 + _t * (6.0 + i % 4), 1320.0) - 20, 200 + fmod(i * 97.0, 420.0) + sin(_t * 0.7 + i) * 18.0)
 			var tw := 0.5 + 0.5 * sin(_t * 2.0 + i * 1.3)
@@ -958,33 +998,6 @@ func _draw_front() -> void:
 		var h := 26.0 + fmod(i * 37.0, 22.0)
 		var s := sin(_t * 1.2 + i) * 4.0
 		_front.draw_colored_polygon(PackedVector2Array([Vector2(x - 12, 740 + dy), Vector2(x + s, 740 + dy - h), Vector2(x + 12, 740 + dy)]), leaf2)
-
-	# front lip of each occupied bed, so beings stand *in* the soil
-	for i in BED_POSITIONS.size():
-		if beds[i] == null:
-			continue
-		var b: Vector2 = BED_POSITIONS[i]
-		var k: float = BED_SCALE[i]
-		var soil := Color("7a4a2e").lerp(Color("2a2430"), ev * 0.6)
-		var lip := PackedVector2Array()
-		for j in 17:
-			var a := PI * j / 16.0
-			lip.append(b + Vector2(cos(a) * 102, 4 + sin(a) * 25) * k)
-		for j in range(15, 0, -1):
-			var a := PI * j / 16.0
-			lip.append(b + Vector2(cos(a) * 70, 8 + sin(a) * 6) * k)
-		_front.draw_colored_polygon(lip, soil)
-		for j in 7:
-			var a := PI * 0.15 + PI * 0.7 * j / 6.0
-			var pp := b + Vector2(cos(a) * 110, sin(a) * 32 + 8) * k
-			_front.draw_colored_polygon(_front_ellipse(pp, Vector2(9, 6) * k, 0.0), Color("a99c8c").lerp(Color("3b3d55"), night * 0.8))
-			_front.draw_colored_polygon(_front_ellipse(pp + Vector2(-1, -1) * k, Vector2(7, 4.5) * k, 0.0), Color("cfc5b6").lerp(Color("3b3d55"), night * 0.8))
-		var tuft := Color("5fa14a").lerp(Color("15302a"), night) if season != Season.WINTER else Color("b9c8d8")
-		for j in 3:
-			var g := b + Vector2((-60 + j * 55) * k, 22 * k)
-			var gsw := sin(_t * 1.4 + j + i) * 2.0
-			for q in 3:
-				_front.draw_line(g + Vector2((q - 1) * 4, 0), g + Vector2((q - 1) * 6 + gsw, -14 - q * 3), tuft, 3.0, true)
 
 	for sp in _season_parts:
 		var p: Vector2 = sp[0]
@@ -1015,10 +1028,21 @@ func _draw_front() -> void:
 	_draw_ear_icon(BTN_ECHO)
 	if _pad_active and _panel == null:
 		var fp: Vector2 = _focus_targets()[_focus]
-		var r: float = BTN_R + 12.0 if _focus < 4 else 70.0 * BED_SCALE[_focus - 4]
-		var pulse := 1.0 + 0.05 * sin(_t * 6.0)
-		_front.draw_arc(fp, r * pulse, 0, TAU, 48, Color("2f2a4a"), 10.0, true)
-		_front.draw_arc(fp, r * pulse, 0, TAU, 48, Color("fff3a0"), 6.0, true)
+		var pulse := 1.0 + 0.03 * (1.0 + sin(_t * TAU / 1.2))
+		if _focus < 4:
+			var r := (BTN_R + 14.0) * pulse
+			_front.draw_arc(fp, r, 0, TAU, 48, Color("2f2a4a"), 12.0, true)
+			_front.draw_arc(fp, r, 0, TAU, 48, Color("ffd23f"), 8.0, true)
+		else:
+			# frame the whole being (never its face): rounded box from soil to top
+			var i := _focus - 4
+			var c = beds[i]
+			var h: float = c.height() if c else 60.0
+			var w: float = (c.radius() + 30.0) if c else 110.0 * BED_SCALE[i]
+			var rect := Rect2(BED_POSITIONS[i] + Vector2(-w, -h - 24), Vector2(w * 2, h + 60))
+			rect = rect.grow(6.0 * (pulse - 1.0) * 20.0)
+			_rounded_frame(rect, 26.0, Color("2f2a4a"), 12.0)
+			_rounded_frame(rect, 26.0, Color("ffd23f"), 8.0)
 	# parent button: small but clearly visible padlock
 	_front.draw_circle(BTN_PARENT + Vector2(0, 3), 24, Color(0, 0, 0, 0.15))
 	_front.draw_circle(BTN_PARENT, 24, Color("fbf6ee"))
@@ -1026,6 +1050,49 @@ func _draw_front() -> void:
 	_front.draw_arc(BTN_PARENT + Vector2(0, -4), 8, PI, TAU, 12, Color("2f2a4a"), 4.0, true)
 	_front.draw_rect(Rect2(BTN_PARENT + Vector2(-11, -4), Vector2(22, 16)), Color("2f2a4a"))
 	_front.draw_circle(BTN_PARENT + Vector2(0, 3), 3, Color("fbf6ee"))
+
+
+## Front lip of one bed, drawn right after its being (same z) so the being
+## stands *in* the soil but nothing ever covers a being standing further front.
+func _draw_bed_front(node: Node2D, i: int) -> void:
+	if beds[i] == null:
+		return
+	var ev := _evening()
+	var night := clampf(ev * 2.0 - 1.0, 0.0, 1.0)
+	var b := Vector2.ZERO
+	var k: float = BED_SCALE[i]
+	var soil := Color("7a4a2e").lerp(Color("2a2430"), ev * 0.6)
+	var lip := PackedVector2Array()
+	for j in 17:
+		var a := PI * j / 16.0
+		lip.append(b + Vector2(cos(a) * 102, 4 + sin(a) * 25) * k)
+	for j in range(15, 0, -1):
+		var a := PI * j / 16.0
+		lip.append(b + Vector2(cos(a) * 70, 8 + sin(a) * 6) * k)
+	node.draw_colored_polygon(lip, soil)
+	for j in 7:
+		var a := PI * 0.15 + PI * 0.7 * j / 6.0
+		var pp := b + Vector2(cos(a) * 110, sin(a) * 32 + 8) * k
+		node.draw_colored_polygon(_front_ellipse(pp, Vector2(9, 6) * k, 0.0), Color("a99c8c").lerp(Color("3b3d55"), night * 0.8))
+		node.draw_colored_polygon(_front_ellipse(pp + Vector2(-1, -1) * k, Vector2(7, 4.5) * k, 0.0), Color("cfc5b6").lerp(Color("3b3d55"), night * 0.8))
+	var tuft := Color("5fa14a").lerp(Color("15302a"), night) if season != Season.WINTER else Color("b9c8d8")
+	for j in [0, 2]:
+		var g := b + Vector2((-70 + j * 70) * k, 24 * k)
+		var gsw := sin(_t * 1.4 + j + i) * 2.0
+		for q in 3:
+			node.draw_line(g + Vector2((q - 1) * 4, 0), g + Vector2((q - 1) * 6 + gsw, -12 - q * 3), tuft, 3.0, true)
+
+
+func _rounded_frame(r: Rect2, rad: float, col: Color, width: float) -> void:
+	var pts := PackedVector2Array()
+	var corners := [r.position + Vector2(r.size.x - rad, rad), r.position + Vector2(r.size.x - rad, r.size.y - rad),
+		r.position + Vector2(rad, r.size.y - rad), r.position + Vector2(rad, rad)]
+	for ci in 4:
+		for j in 7:
+			var a := -PI / 2 + (ci + j / 6.0) * PI / 2
+			pts.append(corners[ci] + Vector2(cos(a), sin(a)) * rad)
+	pts.append(pts[0])
+	_front.draw_polyline(pts, col, width, true)
 
 
 func _front_leaf(at: Vector2, ang: float, length: float, col: Color) -> void:
@@ -1054,7 +1121,7 @@ func set_season(s_: int) -> void:
 	season = s_
 	_season_parts.clear()
 	if season != Season.SUMMER:
-		var n := 70 if season == Season.WINTER else 26
+		var n := 50 if season == Season.WINTER else 18
 		for i in n:
 			_season_parts.append([Vector2(randf() * 1400 - 60, randf() * 760), randf() * TAU])
 	for c in beds:
@@ -1155,7 +1222,7 @@ func _draw_pond(c: Vector2, sky: Color, night: float) -> void:
 
 func _draw_can(at: Vector2, night: float) -> void:
 	var c := Color("6fa8e8").lerp(Color("2a3558"), night * 0.8)
-	var ink := c.darkened(0.45)
+	var ink := c.darkened(0.55)
 	draw_line(at + Vector2(30, -30), at + Vector2(74, -66), ink, 10.0)
 	draw_line(at + Vector2(30, -30), at + Vector2(74, -66), c, 6.0)
 	_draw_ellipse(at + Vector2(78, -68), Vector2(10, 6), c.lightened(0.2))
@@ -1219,9 +1286,9 @@ func _draw_button(c: Vector2, col: Color, enabled: bool, active: bool) -> void:
 		col = col.lerp(Color("c9c4bd"), 0.7)
 	var press := 1.0 - 0.12 * maxf(0.0, 1.0 - since * 5.0)
 	var p := c - Vector2(0, bounce)
-	_front.draw_circle(c + Vector2(0, 7), BTN_R, Color(0, 0, 0, 0.18))
-	_front.draw_circle(p, BTN_R * press, col)
-	_front.draw_arc(p, BTN_R * press, 0, TAU, 48, col.darkened(0.35), 5.0, true)
+	_front.draw_circle(c + Vector2(0, 7), BTN_R + 4, Color(0, 0, 0, 0.25))
+	_front.draw_circle(p, (BTN_R + 4) * press, Color("3a2e4a"))
+	_front.draw_circle(p, (BTN_R - 2) * press, col)
 	_front.draw_arc(p, BTN_R * press - 9, PI * 1.1, PI * 1.6, 12, Color(1, 1, 1, 0.5), 6.0, true)
 	_btn_offset = Vector2(0, -bounce)
 	_btn_alpha = 1.0 if enabled else 0.55

@@ -296,7 +296,8 @@ func _draw() -> void:
 		_star(sp[0], 9.0 * k, Color(sp[3], k))
 	for n in _notes:
 		if n[2] > 0.0:
-			_note(n[0], clampf(1.6 - float(n[2]), 0.0, 1.0), n[3])
+			var life: float = clampf(1.6 - float(n[2]), 0.0, 1.0)
+			_note(n[0], maxf(0.6, life), n[3], 0.4 + 0.6 * life)
 
 
 ## Sprout (stage 0..1) and bud (1..2) before the being appears.
@@ -525,33 +526,50 @@ func _draw_sunflower() -> void:
 	_face(center + Vector2(0, 6), 1.15)
 
 
-## Head top for seasonal accessories, per species.
-const HEAD_TOP := [Vector2(-30, -166), Vector2(-28, -116), Vector2(46, -116), Vector2(-26, -138), Vector2(-14, -134),
-	Vector2(-38, -132), Vector2(-26, -176), Vector2(10, -198), Vector2(-30, -224)]
+## Accessory anchor per species: (x, y) = centre of the hat brim, z = scale.
+## Always well above the eyes so nothing covers a face.
+const HAT := [Vector3(0, -170, 1.0), Vector3(0, -122, 0.95), Vector3(84, -104, 0.62), Vector3(0, -138, 1.0),
+	Vector3(6, -138, 0.9), Vector3(-38, -134, 0.62), Vector3(0, -176, 0.82), Vector3(30, -200, 0.8), Vector3(0, -216, 0.95)]
+const HAT_TILT := [-0.12, 0.1, 0.08, -0.1, 0.12, -0.2, 0.1, -0.08, 0.12]
 
 
 func _draw_accessory() -> void:
-	var at: Vector2 = HEAD_TOP[species]
+	if season == 1:
+		return
+	var h: Vector3 = HAT[species]
+	var at := Vector2(h.x, h.y)
+	var k := h.z
+	var rot: float = HAT_TILT[species]
 	match season:
-		0: # a little blossom tucked on the head
+		0: # a little blossom tucked on the side of the head
+			var bc := at + Vector2(26, -4).rotated(rot) * k
 			for i in 5:
 				var a := TAU * i / 5.0
-				_circ(at + Vector2(cos(a), sin(a)) * 7, 6, Color("ffc1da"))
-			_circ(at, 5, Color("ffd84d"))
-		2: # an autumn leaf
-			_leaf(at + Vector2(-6, 4), -2.2, 30, Color("e08a3c"))
-		3: # knitted hat with pompom
-			var k := 1.35
-			var o := at + Vector2(30, 8) - Vector2(30, 8) * k
-			var hat := PackedVector2Array()
-			for i in 13:
-				var a := PI + PI * i / 12.0
-				hat.append(o + Vector2(30 + cos(a) * 28, 6 + sin(a) * 26) * k)
-			_poly(hat, Color("e05a5a"))
+				_circ(bc + Vector2(cos(a), sin(a)) * 7 * k, 6 * k, Color("ffc1da"))
+			_circ(bc, 5 * k, Color("ffd84d"))
+		2: # an autumn leaf on top
+			_leaf(at + Vector2(-4, -2) * k, -1.9 + rot, 34 * k, Color("e08a3c"))
+		3: # knitted hat: dome, ribs, curved brim, pompom
+			var dome := PackedVector2Array()
+			for i in 15:
+				var a := PI + PI * i / 14.0
+				dome.append(at + Vector2(cos(a) * 32, -4 + sin(a) * 34).rotated(rot) * k)
+			_poly(dome, Color("e05a5a"))
 			for st in 3:
-				draw_line(o + Vector2(14 + st * 16, -14) * k, o + Vector2(14 + st * 16, 2) * k, _col(Color("b83a3a")), 2.0, true)
-			_poly(PackedVector2Array([o + Vector2(-2, 2) * k, o + Vector2(62, 2) * k, o + Vector2(62, 13) * k, o + Vector2(-2, 13) * k]), Color("fff3e0"))
-			_circ(o + Vector2(30, -24) * k, 9 * k, Color("fff3e0"))
+				var x := -14.0 + st * 14.0
+				draw_line(at + Vector2(x, -6).rotated(rot) * k, at + Vector2(x * 0.7, -30).rotated(rot) * k, _col(Color("b83a3a")), 2.5 * k, true)
+			var brim := PackedVector2Array()
+			for i in 13:
+				var u := float(i) / 12.0
+				brim.append(at + Vector2(lerpf(-36, 36, u), -8 - sin(u * PI) * 6).rotated(rot) * k)
+			for i in range(12, -1, -1):
+				var u := float(i) / 12.0
+				brim.append(at + Vector2(lerpf(-36, 36, u), 6 - sin(u * PI) * 6).rotated(rot) * k)
+			_poly(brim, Color("f4ead8"))
+			for st in 5:
+				var x := -26.0 + st * 13.0
+				draw_line(at + Vector2(x, -10 - sin((x + 36) / 72.0 * PI) * 6).rotated(rot) * k, at + Vector2(x, 4 - sin((x + 36) / 72.0 * PI) * 6).rotated(rot) * k, _col(Color("e8dcc8")).darkened(0.1), 2.0, true)
+			_circ(at + Vector2(0, -42).rotated(rot) * k, 10 * k, Color("fff3e0"))
 
 
 # ------------------------------------------------------------- face
@@ -616,8 +634,8 @@ func _star(c: Vector2, r: float, col: Color) -> void:
 
 
 ## Saturated note with a white contour so it reads on any sky.
-func _note(c: Vector2, alpha: float, col: Color) -> void:
-	draw_set_transform(c, 0.0, Vector2.ONE * 1.5)
+func _note(c: Vector2, alpha: float, col: Color, size := 1.0) -> void:
+	draw_set_transform(c, 0.0, Vector2.ONE * 1.5 * size)
 	c = Vector2.ZERO
 	var fill := Color(col.darkened(0.15), alpha)
 	var rim := Color(1, 1, 1, alpha)
