@@ -12,9 +12,13 @@ func _ready() -> void:
 	for i in 4:
 		main.bed_data[i] = {"preset": i * 3, "water": 0.1 if i % 2 == 0 else 0.9}
 		main._spawn(i, null, false)
-	main._help_all = 10.0
-	await get_tree().create_timer(2.0).timeout
+	var n: int = main._help_items().size()
+	main._help_all = main.HELP_STEP * n - 1.0 # first bubble of the tour
+	await get_tree().create_timer(1.0).timeout
 	get_viewport().get_texture().get_image().save_png(out.path_join("water_help.png"))
+	main._help_all = main.HELP_STEP * 2 - 1.3 # the watering can bubble
+	await get_tree().create_timer(0.3).timeout
+	get_viewport().get_texture().get_image().save_png(out.path_join("water_help_can.png"))
 	main._help_all = 0.0
 	var before: float = main.beds[1].scale.x
 	main._press_at(main.CAN_HOME + Vector2(10, -35))

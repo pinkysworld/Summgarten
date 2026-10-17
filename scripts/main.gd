@@ -91,7 +91,8 @@ var _can_pos := CAN_HOME
 var _pour := 0.0 ## seconds left of the pouring animation
 var _pour_drops: Array = [] ## [pos, vel, age]
 var _water_save := 0.0
-var _help_all := 0.0 ## seconds left showing every explanation bubble
+const HELP_STEP := 4.0 ## seconds per bubble in the help tour
+var _help_all := 0.0 ## seconds left in the help tour (one bubble at a time)
 var _help_one := {} ## help key -> seconds left (a single bubble)
 var _help_font: Font
 
@@ -252,7 +253,7 @@ func _press_at(p: Vector2) -> void:
 		_open_parent_gate()
 		return
 	if p.distance_to(BTN_HELP) < 30:
-		_help_all = 0.0 if _help_all > 0.0 else 12.0
+		_help_all = 0.0 if _help_all > 0.0 else HELP_STEP * _help_items().size()
 		_help_one.clear()
 		return
 	match state:
@@ -440,7 +441,7 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 func _greet() -> void:
 	if not settings.get("help_seen", false) and not screenshot_mode:
 		settings.help_seen = true
-		_help_all = 14.0
+		_help_all = HELP_STEP * _help_items().size()
 		_save()
 	var delay := 0.6
 	for i in beds.size():
@@ -858,38 +859,144 @@ func _draw_help() -> void:
 		return
 	if _help_font == null:
 		_help_font = ParentPanel.cjk_font()
+	var items := _help_items()
+	var shown := []
+	if _help_all > 0.0:
+		# tour: one bubble after another, so nothing is covered for long
+		var elapsed := HELP_STEP * items.size() - _help_all
+		var idx := clampi(int(elapsed / HELP_STEP), 0, items.size() - 1)
+		var phase := fmod(elapsed, HELP_STEP)
+		shown.append([items[idx], minf(phase * 3.0, (HELP_STEP - phase) * 3.0), phase])
+	else:
+		for it in items:
+			if _help_one.has(it[0]):
+				shown.append([it, minf(float(_help_one[it[0]]) * 2.0, 1.0), 4.0 - float(_help_one[it[0]])])
+	for sh in shown:
+		_draw_help_bubble(sh[0], clampf(sh[1], 0.0, 1.0), sh[2])
+
+
+func _draw_help_bubble(it: Array, a: float, phase: float) -> void:
 	var ink := Color("2f2a4a")
-	for it in _help_items():
-		var key: String = it[0]
-		var left: float = _help_all if _help_all > 0.0 else float(_help_one.get(key, 0.0))
-		if left <= 0.0:
-			continue
-		var a := clampf(left * 2.0, 0.0, 1.0)
-		var text := tr(key)
-		var size := _help_font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, 250, 19)
-		var box := size + Vector2(28, 20)
-		var target: Vector2 = it[1]
-		var side: Vector2 = it[2]
-		var gap := BTN_R + 22.0
-		var pos: Vector2
-		if side == Vector2.RIGHT:
-			pos = target + Vector2(gap, -box.y * 0.5)
-		elif side == Vector2.DOWN:
-			# sun and rain sit side by side: stack their bubbles
-			pos = target + Vector2(-box.x + 40, gap + (84.0 if key == "HELP_RAIN" else 0.0))
-		else:
-			pos = target + Vector2(-box.x * 0.5, -box.y - 34)
-		pos.x = clampf(pos.x, 10, 1270 - box.x)
-		pos.y += sin(_t * 2.0 + target.x) * 2.0
-		var r := Rect2(pos, box)
-		var tip := target + side * (BTN_R + 4.0) if side != Vector2.UP else target
-		var base := r.get_center().clamp(r.position + Vector2(24, 18), r.end - Vector2(24, 18))
-		var n := (tip - base).normalized().orthogonal() * 12.0
-		_overlay.draw_colored_polygon(PackedVector2Array([base + n, tip, base - n]), Color(ink, a))
-		_overlay.draw_style_box(_help_box(Color(ink, a)), r.grow(3))
-		_overlay.draw_colored_polygon(PackedVector2Array([base + n * 0.7, tip.lerp(base, 0.12), base - n * 0.7]), Color(1, 0.98, 0.93, a))
-		_overlay.draw_style_box(_help_box(Color(1, 0.98, 0.93, a)), r)
-		_overlay.draw_multiline_string(_help_font, pos + Vector2(14, 10 + _help_font.get_ascent(19)), text, HORIZONTAL_ALIGNMENT_LEFT, 250, 19, -1, Color(ink, a))
+	var paper := Color(1, 0.98, 0.93, a)
+	var key: String = it[0]
+	var text := tr(key)
+	var fs := 16
+	var size := _help_font.get_multiline_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, 230, fs)
+	var icon_h := 58.0
+	var box := Vector2(maxf(size.x, 150.0) + 28, size.y + icon_h + 24)
+	var target: Vector2 = it[1]
+	var side: Vector2 = it[2]
+	var gap := BTN_R + 22.0
+	var pos: Vector2
+	if side == Vector2.RIGHT:
+		pos = target + Vector2(gap, -box.y * 0.5)
+	elif side == Vector2.DOWN:
+		pos = target + Vector2(-box.x * 0.5, gap)
+	else:
+		pos = target + Vector2(-box.x * 0.5, -box.y - 40)
+	pos.x = clampf(pos.x, 10, 1200 - box.x)
+	pos.y = clampf(pos.y, 10, 700 - box.y)
+	pos.y += sin(_t * 2.0) * 2.0
+	var r := Rect2(pos, box)
+	var tip := target + side * (BTN_R + 4.0) if side != Vector2.UP else target
+	var base := r.get_center().clamp(r.position + Vector2(24, 18), r.end - Vector2(24, 18))
+	var n := (tip - base).normalized().orthogonal() * 12.0
+	_overlay.draw_colored_polygon(PackedVector2Array([base + n, tip, base - n]), Color(ink, a))
+	_overlay.draw_style_box(_help_box(Color(ink, a)), r.grow(3))
+	_overlay.draw_colored_polygon(PackedVector2Array([base + n * 0.7, tip.lerp(base, 0.12), base - n * 0.7]), paper)
+	_overlay.draw_style_box(_help_box(paper), r)
+	_draw_help_icon(key, Vector2(r.get_center().x, pos.y + 12 + icon_h * 0.5), a)
+	_overlay.draw_multiline_string(_help_font, pos + Vector2(14, icon_h + 14 + _help_font.get_ascent(fs)), text, HORIZONTAL_ALIGNMENT_CENTER, box.x - 28, fs, -1, Color(ink, 0.75 * a))
+	_draw_tap_hand(target, phase, a)
+
+
+## A pointing hand that taps the target twice per bubble.
+func _draw_tap_hand(target: Vector2, phase: float, a: float) -> void:
+	var tap := absf(sin(phase * PI * 1.1))
+	var p := target + Vector2(26, 34) + Vector2(10, 14) * tap
+	var skin := Color("ffd9b8")
+	var ink := Color("2f2a4a")
+	if tap < 0.15:
+		_overlay.draw_arc(target, 20 + (0.15 - tap) * 120, 0, TAU, 24, Color(1, 1, 1, 0.8 * a), 4.0, true)
+	_overlay.draw_set_transform(p, -0.5, Vector2.ONE)
+	_overlay.draw_rect(Rect2(Vector2(-6, -40), Vector2(12, 30)), Color(ink, a))
+	_overlay.draw_circle(Vector2(0, -40), 6, Color(ink, a))
+	_overlay.draw_circle(Vector2(0, 0), 20, Color(ink, a))
+	_overlay.draw_rect(Rect2(Vector2(-4, -40), Vector2(8, 30)), Color(skin, a))
+	_overlay.draw_circle(Vector2(0, -40), 4, Color(skin, a))
+	_overlay.draw_circle(Vector2(0, 0), 18, Color(skin, a))
+	for k in 3:
+		_overlay.draw_arc(Vector2(-10 + k * 9, -14), 5, PI, TAU, 8, Color(ink, 0.6 * a), 2.0)
+	_overlay.draw_set_transform(Vector2.ZERO)
+
+
+## Picture first: what the button does, readable without text.
+func _draw_help_icon(key: String, c: Vector2, a: float) -> void:
+	match key:
+		"HELP_CONDUCTOR":
+			for k in 3:
+				_overlay.draw_circle(c + Vector2(-30 + k * 30, 12), 11, Color([Color("9b6bd6"), Color("ffc93c"), Color("7cc86a")][k], a))
+				_help_note(c + Vector2(-26 + k * 30, -12 - (k % 2) * 6), a)
+		"HELP_ECHO":
+			_overlay.draw_circle(c + Vector2(-30, 6), 13, Color(Color("4cc3b5"), a))
+			_help_note(c + Vector2(-26, -18), a)
+			_help_arrow(c + Vector2(-8, 4), c + Vector2(12, 4), a)
+			_help_face(c + Vector2(34, 6), a)
+			_help_note(c + Vector2(40, -18), a)
+		"HELP_SUN":
+			for k in 8:
+				var d := Vector2.from_angle(k * TAU / 8.0 + _t * 0.5)
+				_overlay.draw_line(c + d * 18, c + d * 26, Color(Color("ffb02e"), a), 4.0)
+			_overlay.draw_circle(c, 15, Color(Color("ffd84d"), a))
+		"HELP_RAIN":
+			_overlay.draw_circle(c + Vector2(-10, -10), 12, Color(Color("9fb3cc"), a))
+			_overlay.draw_circle(c + Vector2(8, -12), 15, Color(Color("9fb3cc"), a))
+			for k in 3:
+				_help_drop(c + Vector2(-14 + k * 14, 14 + fmod(_t * 30.0 + k * 7, 10.0)), a)
+		"HELP_CAN":
+			_help_drop(c + Vector2(-34, 4), a)
+			_help_arrow(c + Vector2(-20, 4), c + Vector2(-2, 4), a)
+			_overlay.draw_line(c + Vector2(18, 20), c + Vector2(18, 0), Color(Color("4f8f3a"), a), 4.0)
+			_overlay.draw_circle(c + Vector2(18, -6), 10 + 3 * sin(_t * 3.0), Color(Color("ff8fb8"), a))
+			_help_arrow(c + Vector2(40, 18), c + Vector2(40, -16), a)
+		_:
+			# empty bed: sing into it (mouth with notes), a sprout appears
+			_help_face(c + Vector2(-26, 4), a, true)
+			_help_note(c + Vector2(0, -12), a)
+			_overlay.draw_line(c + Vector2(32, 20), c + Vector2(32, 0), Color(Color("4f8f3a"), a), 4.0)
+			_overlay.draw_colored_polygon(_front_ellipse(c + Vector2(42, -2), Vector2(10, 5), -0.4), Color(Color("7cc86a"), a))
+
+
+func _help_note(c: Vector2, a: float) -> void:
+	var ink := Color(Color("2f2a4a"), a)
+	_overlay.draw_circle(c, 5, ink)
+	_overlay.draw_line(c + Vector2(4, 0), c + Vector2(4, -16), ink, 2.5)
+	_overlay.draw_line(c + Vector2(4, -16), c + Vector2(11, -12), ink, 2.5)
+
+
+func _help_drop(c: Vector2, a: float) -> void:
+	var col := Color(Color("3d8fe0"), a)
+	_overlay.draw_circle(c, 7, col)
+	_overlay.draw_colored_polygon(PackedVector2Array([c + Vector2(-6.4, -3), c + Vector2(0, -15), c + Vector2(6.4, -3)]), col)
+
+
+func _help_arrow(from: Vector2, to: Vector2, a: float) -> void:
+	var ink := Color(Color("2f2a4a"), a)
+	var d := (to - from).normalized()
+	_overlay.draw_line(from, to, ink, 3.5)
+	_overlay.draw_line(to, to - d.rotated(0.6) * 9, ink, 3.5)
+	_overlay.draw_line(to, to - d.rotated(-0.6) * 9, ink, 3.5)
+
+
+func _help_face(c: Vector2, a: float, singing := false) -> void:
+	var ink := Color(Color("2f2a4a"), a)
+	_overlay.draw_circle(c, 15, Color(Color("ffd9b8"), a))
+	_overlay.draw_circle(c + Vector2(-5, -3), 2, ink)
+	_overlay.draw_circle(c + Vector2(5, -3), 2, ink)
+	if singing:
+		_overlay.draw_circle(c + Vector2(0, 6), 4, ink)
+	else:
+		_overlay.draw_arc(c + Vector2(0, 2), 6, 0.4, PI - 0.4, 8, ink, 2.0)
 
 
 func _help_box(col: Color) -> StyleBoxFlat:
