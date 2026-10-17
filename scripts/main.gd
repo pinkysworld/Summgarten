@@ -760,6 +760,7 @@ func _go_to_sleep() -> void:
 	for c in beds:
 		if c:
 			c.sleeping = true
+			c.raining = false
 			var pitch := randf_range(0.8, 1.4)
 			get_tree().create_timer(delay).timeout.connect(func():
 				Audio.play_ambient(_yawn, pitch, 6.0)
