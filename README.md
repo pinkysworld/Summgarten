@@ -1,4 +1,4 @@
-# Klanggarten 1.0.0
+# Klanggarten 1.1.0
 
 Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen und Wesen wachsen, die den Klang pentatonisch korrigiert im Takt vorsingen. Konzept: [Klanggarten – Spielkonzept.md](Klanggarten%20–%20Spielkonzept.md).
 

@@ -255,39 +255,107 @@ func _evening() -> float:
 
 func _draw() -> void:
 	var ev := _evening()
-	var sky := Color("8cc8ec").lerp(Color("f2a46b"), clampf(ev * 2.0, 0.0, 1.0)).lerp(Color("1f2550"), clampf(ev * 2.0 - 1.0, 0.0, 1.0))
+	var night := clampf(ev * 2.0 - 1.0, 0.0, 1.0)
+	var dusk := clampf(ev * 2.0, 0.0, 1.0)
+	var top := Color("5fb0e8").lerp(Color("7b6fc4"), dusk).lerp(Color("0f1436"), night)
+	var bottom := Color("d4f0ff").lerp(Color("ffb36b"), dusk).lerp(Color("2b2f66"), night)
 	if weather == Weather.RAIN:
-		sky = sky.lerp(Color("7b8794"), 0.45)
+		top = top.lerp(Color("66717f"), 0.55)
+		bottom = bottom.lerp(Color("aab4bf"), 0.5)
 	elif weather == Weather.SUN:
-		sky = sky.lerp(Color("bfe6ff"), 0.3)
-	draw_rect(Rect2(-2000, -2000, 5280, 4720), sky)
+		bottom = bottom.lerp(Color("fff4c2"), 0.4)
+	_gradient_rect(Rect2(-2000, -2000, 5280, 2000), top, top)
+	_gradient_rect(Rect2(-2000, 0, 5280, 420), top, bottom)
 
-	# Sun / moon
+	# Stars, moon, sun
+	if night > 0.0:
+		for i in 60:
+			var sp := Vector2(fmod(i * 197.3, 1300.0) - 10, fmod(i * 83.7, 330.0))
+			var tw := 0.6 + 0.4 * sin(_t * (1.5 + fmod(i, 3.0)) + i)
+			draw_circle(sp, 1.2 + fmod(i, 3.0) * 0.6, Color(1, 1, 0.9, night * tw))
 	if state == State.NIGHT:
 		draw_circle(Vector2(640, 120), 46, Color("f6f1c8"))
-		draw_circle(Vector2(662, 106), 40, sky)
-		for i in 30:
-			var sp := Vector2(fmod(i * 197.0, 1280.0), fmod(i * 83.0, 300.0))
-			draw_circle(sp, 2.0 + sin(_t * 2.0 + i) * 0.8, Color(1, 1, 1, 0.8))
+		draw_circle(Vector2(664, 104), 40, top.lerp(bottom, 0.25))
 	else:
-		var sun_y := lerpf(130.0, 330.0, ev)
-		draw_circle(Vector2(640, sun_y), 50, Color("ffe27a").lerp(Color("ff9a5a"), ev))
+		var sun_c := Vector2(640, lerpf(120.0, 360.0, ev))
+		var sun_col := Color("ffe27a").lerp(Color("ff8a4a"), ev)
+		var halo := 1.0 if weather != Weather.RAIN else 0.3
+		if weather == Weather.RAIN:
+			sun_col = Color(sun_col, 0.35)
+		for k in 4:
+			draw_circle(sun_c, 60 + k * 28 + sin(_t * 1.5) * 4, Color(sun_col, 0.10 * halo))
+		for i in 12:
+			var d := Vector2.from_angle(TAU * i / 12.0 + _t * 0.15)
+			draw_line(sun_c + d * 62, sun_c + d * (78 + 6 * sin(_t * 2.0 + i)), Color(sun_col, 0.7 * halo), 5.0)
+		draw_circle(sun_c, 52, sun_col)
+		draw_circle(sun_c + Vector2(-14, -14), 22, Color(1, 1, 1, 0.25))
 
-	# Hills and ground
-	var hill := Color("7cc46a").lerp(Color("2d4a45"), ev)
-	draw_circle(Vector2(250, 760), 420, hill.darkened(0.1))
-	draw_circle(Vector2(1050, 780), 460, hill.darkened(0.05))
-	draw_rect(Rect2(-2000, 380, 5280, 3000), hill)
+	# Drifting clouds
+	var cloud_col := Color(1, 1, 1, 0.9).lerp(Color("c9a0b8"), dusk * 0.5).lerp(Color("39406e"), night)
+	if weather == Weather.RAIN:
+		cloud_col = Color("8e98a6")
+	for i in 5:
+		var speed := 8.0 + i * 3.0
+		var x := fmod(i * 330.0 + _t * speed, 1700.0) - 250.0
+		_draw_cloud(Vector2(x, 70 + fmod(i * 61.0, 160.0)), 0.7 + fmod(i * 0.37, 0.6), cloud_col)
+
+	# Layered hills with soft gradients
+	var far := Color("9fd48a").lerp(Color("c7a487"), dusk * 0.4).lerp(Color("23334f"), night)
+	var mid := Color("7cc46a").lerp(Color("b08a62"), dusk * 0.3).lerp(Color("1d3a3c"), night)
+	var near := Color("6bb85a").lerp(Color("8a7a4a"), dusk * 0.3).lerp(Color("183232"), night)
+	_draw_hill(330, 120, 0.004, 1.0, far)
+	_draw_hill(370, 60, 0.007, 2.3, mid)
+	_gradient_rect(Rect2(-2000, 390, 5280, 2400), near.lightened(0.08), near.darkened(0.12))
+	draw_rect(Rect2(-2000, 2790, 5280, 2000), near.darkened(0.12))
+
+	# Grass tufts and tiny flowers (deterministic)
+	var tuft := near.darkened(0.18)
+	for i in 70:
+		var gp := Vector2(fmod(i * 157.0, 1320.0) - 20, 400 + fmod(i * 89.0, 320.0))
+		var sway := sin(_t * 1.3 + i) * 3.0
+		for k in 3:
+			draw_line(gp + Vector2((k - 1) * 4, 0), gp + Vector2((k - 1) * 7 + sway, -12 - k * 3), tuft, 2.0)
+		if i % 6 == 0:
+			var fc: Color = [Color("ffffff"), Color("ffd84d"), Color("ff9ec4")][i % 3]
+			draw_circle(gp + Vector2(sway, -16), 3.5, fc.lerp(tuft, night * 0.7))
 
 	# Beds
 	for i in BED_POSITIONS.size():
 		var b: Vector2 = BED_POSITIONS[i]
-		_draw_ellipse(b + Vector2(0, 8), Vector2(95, 26), Color("6b4a2f").lerp(Color("2a2430"), ev * 0.6))
+		var soil := Color("7a5236").lerp(Color("2a2430"), ev * 0.6)
+		_draw_ellipse(b + Vector2(0, 14), Vector2(102, 30), Color(0, 0, 0, 0.12))
+		_draw_ellipse(b + Vector2(0, 8), Vector2(98, 28), soil.darkened(0.25))
+		_draw_ellipse(b + Vector2(0, 5), Vector2(90, 22), soil)
+		for k in 5:
+			draw_circle(b + Vector2(-60 + k * 30, 6 + (k % 2) * 6), 3, soil.lightened(0.15))
 		if beds[i] == null and state != State.NIGHT:
 			var glow := 0.5 + 0.5 * sin(_t * 3.0 + i)
-			draw_circle(b + Vector2(0, -6), 26 + glow * 8, Color(1, 0.95, 0.6, 0.25 + 0.2 * glow))
-			_draw_ellipse(b + Vector2(0, -6), Vector2(14, 18), Color("d9a441"))
-			draw_line(b + Vector2(0, -22), b + Vector2(6, -32), Color("5aa64b"), 4.0)
+			for k in 3:
+				draw_circle(b + Vector2(0, -6), 18 + k * 9 + glow * 6, Color(1, 0.95, 0.6, (0.22 - k * 0.06) * (0.6 + glow * 0.4)))
+			var bounce := absf(sin(_t * 2.0 + i)) * 4.0
+			_draw_ellipse(b + Vector2(0, -6 - bounce), Vector2(14, 18), Color("e0a83e"))
+			_draw_ellipse(b + Vector2(-4, -12 - bounce), Vector2(4, 6), Color(1, 1, 1, 0.5))
+			draw_line(b + Vector2(0, -22 - bounce), b + Vector2(6, -34 - bounce), Color("5aa64b"), 4.0)
+			_draw_ellipse(b + Vector2(11, -36 - bounce), Vector2(8, 4), Color("6cc15a"))
+			for k in 3:
+				var a := _t * 1.5 + TAU * k / 3.0 + i
+				draw_circle(b + Vector2(cos(a) * 34, -10 + sin(a) * 14), 2.5, Color(1, 1, 0.8, 0.8 * glow))
+
+	# Butterflies by day, fireflies at night
+	if state == State.NIGHT or night > 0.3:
+		for i in 18:
+			var fp := Vector2(fmod(i * 233.0 + sin(_t * 0.4 + i) * 60.0, 1280.0), 300 + fmod(i * 71.0, 380.0) + cos(_t * 0.6 + i) * 30.0)
+			var f := 0.5 + 0.5 * sin(_t * 2.5 + i * 1.7)
+			draw_circle(fp, 9, Color(1, 1, 0.5, 0.15 * f))
+			draw_circle(fp, 3, Color(1, 1, 0.6, 0.9 * f))
+	elif weather != Weather.RAIN:
+		for i in 3:
+			var bp := Vector2(fmod(_t * 40.0 + i * 450.0, 1500.0) - 100, 250 + sin(_t * 0.9 + i * 2.0) * 80 + i * 40)
+			var flap := absf(sin(_t * 12.0 + i))
+			var bc: Color = [Color("ffb3d1"), Color("ffd84d"), Color("9fd0ff")][i]
+			_draw_ellipse(bp + Vector2(-7 * flap, 0), Vector2(8 * flap + 1, 10), bc)
+			_draw_ellipse(bp + Vector2(7 * flap, 0), Vector2(8 * flap + 1, 10), bc)
+			draw_line(bp + Vector2(0, -6), bp + Vector2(0, 6), Color("3a2f40"), 2.0)
 
 	if weather == Weather.RAIN:
 		for r in _rain:
@@ -364,6 +432,26 @@ func _draw_cloud_icon(c: Vector2) -> void:
 	draw_rect(Rect2(c + Vector2(-30, -4), Vector2(66, 18)), col)
 	for k in 3:
 		draw_line(c + Vector2(-16 + k * 16, 22), c + Vector2(-20 + k * 16, 36), Color("4f9de8"), 4.0)
+
+
+func _gradient_rect(r: Rect2, top: Color, bottom: Color) -> void:
+	draw_polygon(PackedVector2Array([r.position, r.position + Vector2(r.size.x, 0), r.end, r.position + Vector2(0, r.size.y)]),
+		PackedColorArray([top, top, bottom, bottom]))
+
+
+func _draw_hill(base_y: float, amp: float, freq: float, ph: float, col: Color) -> void:
+	var pts := PackedVector2Array()
+	for x in range(-200, 1501, 40):
+		pts.append(Vector2(x, base_y - amp * (0.5 + 0.5 * sin(x * freq + ph))))
+	pts.append(Vector2(1500, 900))
+	pts.append(Vector2(-200, 900))
+	draw_colored_polygon(pts, col)
+
+
+func _draw_cloud(c: Vector2, k: float, col: Color) -> void:
+	for b in [Vector3(-40, 0, 28), Vector3(-10, -16, 36), Vector3(26, -6, 30), Vector3(52, 6, 20), Vector3(0, 8, 30)]:
+		draw_circle(c + Vector2(b.x, b.y) * k, b.z * k, col)
+	draw_circle(c + Vector2(-14, -24) * k, 14 * k, Color(1, 1, 1, col.a * 0.4))
 
 
 func _draw_ellipse(c: Vector2, r: Vector2, col: Color) -> void:
