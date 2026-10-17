@@ -866,6 +866,33 @@ func _draw_front() -> void:
 		var s := sin(_t * 1.2 + i) * 4.0
 		_front.draw_colored_polygon(PackedVector2Array([Vector2(x - 12, 740), Vector2(x + s, 740 - h), Vector2(x + 12, 740)]), leaf2)
 
+	# front lip of each occupied bed, so beings stand *in* the soil
+	for i in BED_POSITIONS.size():
+		if beds[i] == null:
+			continue
+		var b: Vector2 = BED_POSITIONS[i]
+		var k: float = BED_SCALE[i]
+		var soil := Color("7a4a2e").lerp(Color("2a2430"), ev * 0.6)
+		var lip := PackedVector2Array()
+		for j in 17:
+			var a := PI * j / 16.0
+			lip.append(b + Vector2(cos(a) * 102, 4 + sin(a) * 25) * k)
+		for j in range(15, 0, -1):
+			var a := PI * j / 16.0
+			lip.append(b + Vector2(cos(a) * 70, 8 + sin(a) * 6) * k)
+		_front.draw_colored_polygon(lip, soil)
+		for j in 7:
+			var a := PI * 0.15 + PI * 0.7 * j / 6.0
+			var pp := b + Vector2(cos(a) * 110, sin(a) * 32 + 8) * k
+			_front.draw_colored_polygon(_front_ellipse(pp, Vector2(9, 6) * k, 0.0), Color("a99c8c").lerp(Color("3b3d55"), night * 0.8))
+			_front.draw_colored_polygon(_front_ellipse(pp + Vector2(-1, -1) * k, Vector2(7, 4.5) * k, 0.0), Color("cfc5b6").lerp(Color("3b3d55"), night * 0.8))
+		var tuft := Color("5fa14a").lerp(Color("15302a"), night) if season != Season.WINTER else Color("b9c8d8")
+		for j in 3:
+			var g := b + Vector2((-60 + j * 55) * k, 22 * k)
+			var gsw := sin(_t * 1.4 + j + i) * 2.0
+			for q in 3:
+				_front.draw_line(g + Vector2((q - 1) * 4, 0), g + Vector2((q - 1) * 6 + gsw, -14 - q * 3), tuft, 3.0, true)
+
 	for sp in _season_parts:
 		var p: Vector2 = sp[0]
 		var ph: float = sp[1]

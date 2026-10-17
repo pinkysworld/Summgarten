@@ -273,7 +273,8 @@ func _draw() -> void:
 	# soft ground shadow
 	draw_colored_polygon(_ell_pts(Vector2(0, 4), Vector2(62 * s, 14 * s), 0.0, 24), Color(0.1, 0.05, 0.1, 0.22))
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.045 * (1.0 - _sleep_blend * 0.7)
-	var squash := 1.0 + 0.16 * sing_amp + 0.06 * beat_pulse
+	var breath := 0.018 * sin(_t * 2.2) * (1.0 - _sleep_blend * 0.3) * (0.6 if not sleeping else 1.4)
+	var squash := 1.0 + 0.16 * sing_amp + 0.06 * beat_pulse + breath
 	var lean := sway + bow_amt * 0.45 + _look.x * 0.05
 	draw_set_transform(Vector2(0, -hop * 40.0 - _bob * 8.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	match species:
