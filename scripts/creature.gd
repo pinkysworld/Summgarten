@@ -40,6 +40,12 @@ var bow_amt := 0.0
 var hop := 0.0
 var sing_amp := 0.0
 var sleeping := false
+var raining := false ## the frog loves rain, everyone else looks up
+var crouch := 0.0 ## anticipation: squashes down before a hop or a song
+var _hat_swing := 0.0 ## follow-through: hats and leaves lag behind and wobble
+var _hat_vel := 0.0
+var _prev_motion := 0.0
+var _idle_in := randf_range(4.0, 9.0)
 var thirst := 0.0 ## 0 fresh .. 1 very thirsty: droops and fades until watered
 var _thirst_shown := 0.0
 var _drops: Array = [] ## [pos, vel, age] water splash
@@ -93,7 +99,9 @@ func sing(shift: float) -> void:
 	Audio.play(stream, freq, shift)
 	sang.emit(self)
 	var tw := create_tween()
-	tw.tween_property(self, "sing_amp", 1.0, 0.08)
+	tw.tween_property(self, "crouch", 0.6, 0.05)
+	tw.tween_property(self, "crouch", 0.0, 0.08)
+	tw.parallel().tween_property(self, "sing_amp", 1.0, 0.08)
 	tw.tween_property(self, "sing_amp", 0.0, 0.6).set_trans(Tween.TRANS_SINE)
 	var top: float = -HEIGHTS[species] - 10.0
 	for i in 2:
@@ -145,14 +153,41 @@ func bow() -> void:
 func celebrate_hop(delay: float) -> void:
 	var tw := create_tween()
 	tw.tween_interval(delay)
-	tw.tween_property(self, "hop", 1.0, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(self, "crouch", 1.0, 0.1).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(self, "crouch", 0.0, 0.08)
+	tw.parallel().tween_property(self, "hop", 1.0, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 	tw.tween_property(self, "hop", 0.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
+## Small idle moments, different for every species (personality).
+func _idle_act() -> void:
+	if sleeping or grow < 0.9 or sing_amp > 0.05 or _thirst_shown > 0.6:
+		return
+	var tw := create_tween()
+	match species:
+		Species.FROG, Species.BIRD, Species.BEETLE: # springy: a little hop
+			tw.tween_property(self, "crouch", 0.8, 0.14).set_trans(Tween.TRANS_SINE)
+			tw.tween_property(self, "crouch", 0.0, 0.06)
+			tw.parallel().tween_property(self, "hop", 0.45 if species == Species.FROG else 0.25, 0.15).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+			tw.tween_property(self, "hop", 0.0, 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+		Species.SNAIL: # shy: ducks down, then peeks out again
+			tw.tween_property(self, "crouch", 1.0, 0.25).set_trans(Tween.TRANS_SINE)
+			tw.tween_interval(0.8)
+			tw.tween_property(self, "crouch", 0.0, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		_: # plants: a happy wiggle
+			_hat_vel += 5.0
+			tw.tween_property(self, "_bob", 0.6, 0.15)
+			tw.tween_property(self, "_bob", 0.0, 0.35).set_trans(Tween.TRANS_BACK)
 
 
 ## A neighbour sang: look at it and bob along a little.
 func notice(from: Vector2) -> void:
 	if sleeping:
 		return
+	if species == Species.SNAIL and randf() < 0.5: # shy snail flinches first
+		var sh := create_tween()
+		sh.tween_property(self, "crouch", 0.7, 0.1)
+		sh.tween_property(self, "crouch", 0.0, 0.4).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	_look_target = (from - global_position).normalized()
 	_look_hold = 1.6
 	var tw := create_tween()
@@ -176,6 +211,22 @@ func _process(delta: float) -> void:
 		_next_blink = randf_range(2.0, 5.0)
 	_blink = maxf(0.0, _blink - delta * 7.0)
 	_invite = maxf(0.0, _invite - delta)
+	_idle_in -= delta
+	if _idle_in <= 0.0:
+		_idle_in = randf_range(1.5, 3.0) if raining and species == Species.FROG else randf_range(5.0, 11.0)
+		_idle_act()
+		if raining and species == Species.FROG and not sleeping:
+			cheer()
+		elif raining and not sleeping:
+			_look_target = Vector2(randf_range(-0.3, 0.3), -0.6)
+			_look_hold = 1.5
+	# follow-through spring for hats and leaves
+	var motion := hop * 1.6 + sing_amp * 0.8 + _bob * 0.8 - crouch * 0.6
+	if delta > 0.0:
+		_hat_vel += (motion - _prev_motion) / delta * 0.9
+	_prev_motion = motion
+	_hat_vel += (-_hat_swing * 120.0 - _hat_vel * 9.0) * delta
+	_hat_swing = clampf(_hat_swing + _hat_vel * delta * 0.06, -0.45, 0.45)
 	_thirst_shown = move_toward(_thirst_shown, thirst, delta * 0.8)
 	var dry := clampf((_thirst_shown - 0.4) / 0.6, 0.0, 1.0)
 	modulate = Color.WHITE.lerp(Color(0.8, 0.76, 0.64), dry * 0.8)
@@ -285,10 +336,13 @@ func _draw() -> void:
 	draw_colored_polygon(_ell_pts(Vector2(0, 4), Vector2(62 * s, 14 * s), 0.0, 24), Color(0.1, 0.05, 0.1, 0.22))
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.045 * (1.0 - _sleep_blend * 0.7)
 	var breath := 0.018 * sin(_t * 2.2) * (1.0 - _sleep_blend * 0.3) * (0.6 if not sleeping else 1.4)
-	var squash := 1.0 + 0.16 * sing_amp + 0.06 * beat_pulse + breath
+	var squash := 1.0 + 0.16 * sing_amp + 0.06 * beat_pulse + breath - 0.2 * crouch
 	var droop := clampf((_thirst_shown - 0.4) / 0.6, 0.0, 1.0)
 	squash *= 1.0 - droop * 0.16
-	var lean := sway * (1.0 - droop * 0.6) + bow_amt * 0.45 + _look.x * 0.05 + droop * 0.22
+	var sun_lean := 0.0
+	if species == Species.SUNFLOWER and not sleeping:
+		sun_lean = clampf((560.0 - global_position.x) / 1600.0, -0.14, 0.14) # follows the sun
+	var lean := sun_lean + sway * (1.0 - droop * 0.6) + bow_amt * 0.45 + _look.x * 0.05 + droop * 0.22
 	draw_set_transform(Vector2(0, -hop * 40.0 - _bob * 8.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	match species:
 		Species.MUSHROOM: _draw_mushroom()
@@ -557,7 +611,7 @@ func _draw_accessory() -> void:
 	var h: Vector3 = HAT[species]
 	var at := Vector2(h.x, h.y)
 	var k := h.z
-	var rot: float = HAT_TILT[species]
+	var rot: float = HAT_TILT[species] + _hat_swing
 	match season:
 		0: # a little blossom tucked on the side of the head
 			var bc := at + Vector2(26, -4).rotated(rot) * k

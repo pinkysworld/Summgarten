@@ -723,6 +723,9 @@ func _set_weather(w: Weather) -> void:
 	weather = w
 	for c in beds:
 		if c:
+			c.raining = w == Weather.RAIN
+	for c in beds:
+		if c:
 			c.sing(_shift())
 			break
 
