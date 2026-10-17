@@ -1,0 +1,36 @@
+keys,de,en,zh_CN,fr,es,pt_BR,ja,ru,pl
+PARENTS,Elternbereich,Parents' area,家长专区,Espace parents,Zona para padres,Área dos pais,保護者エリア,Раздел для родителей,Strefa rodzica
+GATE_Q,Bitte lösen: %d × %d = ?,Please solve: %d × %d = ?,请计算：%d × %d = ?,Résolvez : %d × %d = ?,Resuelve: %d × %d = ?,Resolva: %d × %d = ?,計算してください：%d × %d = ?,Решите: %d × %d = ?,Rozwiąż: %d × %d = ?
+BACK,Zurück zum Garten,Back to the garden,返回花园,Retour au jardin,Volver al jardín,Voltar ao jardim,庭にもどる,Назад в сад,Wróć do ogrodu
+MIC_ON,Mikrofon: an,Microphone: on,麦克风：开,Micro : activé,Micrófono: activado,Microfone: ligado,マイク：オン,Микрофон: вкл.,Mikrofon: wł.
+MIC_OFF,Mikrofon: aus – eingebaute Klänge,Microphone: off – built-in sounds,麦克风：关 – 使用内置声音,Micro : désactivé – sons intégrés,Micrófono: desactivado – sonidos incluidos,Microfone: desligado – sons incluídos,マイク：オフ – 内蔵サウンド,Микрофон: выкл. – встроенные звуки,Mikrofon: wył. – wbudowane dźwięki
+VOLUME,Lautstärke,Volume,音量,Volume,Volumen,Volume,音量,Громкость,Głośność
+SLEEP_AFTER,Der Garten schläft ein nach,The garden falls asleep after,花园入睡时间,Le jardin s'endort après,El jardín se duerme tras,O jardim adormece após,庭がねむるまで,Сад засыпает через,Ogród zasypia po
+MINUTES,%d Min,%d min,%d 分钟,%d min,%d min,%d min,%d 分,%d мин,%d min
+SAVE_CONCERT,Konzert als Audiodatei speichern,Save concert as audio file,将音乐会保存为音频文件,Enregistrer le concert (audio),Guardar concierto como audio,Salvar concerto como áudio,コンサートを音声ファイルで保存,Сохранить концерт как аудио,Zapisz koncert jako plik audio
+NO_BEINGS,Noch keine Wesen im Garten.,No creatures in the garden yet.,花园里还没有小生物。,Pas encore de créatures dans le jardin.,Aún no hay criaturas en el jardín.,Ainda não há criaturas no jardim.,まだ庭に生きものがいません。,В саду пока нет существ.,W ogrodzie nie ma jeszcze stworków.
+SAVED,Gespeichert: %s,Saved: %s,已保存：%s,Enregistré : %s,Guardado: %s,Salvo: %s,保存しました：%s,Сохранено: %s,Zapisano: %s
+TRUST,Offline · Keine Werbung · Keine Datenerhebung · Aufnahmen bleiben auf diesem Gerät,Offline · No ads · No data collection · Recordings stay on this device,离线 · 无广告 · 不收集数据 · 录音仅保存在本设备,Hors ligne · Sans pub · Aucune collecte de données · Les enregistrements restent sur l'appareil,Sin conexión · Sin anuncios · Sin recopilar datos · Las grabaciones se quedan en el dispositivo,Offline · Sem anúncios · Sem coleta de dados · As gravações ficam no aparelho,オフライン · 広告なし · データ収集なし · 録音はこの端末だけに保存,Офлайн · Без рекламы · Без сбора данных · Записи остаются на устройстве,Offline · Bez reklam · Bez zbierania danych · Nagrania zostają na urządzeniu
+DELETE_REC,Aufnahmen löschen,Delete recordings,删除录音,Supprimer les enregistrements,Borrar grabaciones,Apagar gravações,録音を削除,Удалить записи,Usuń nagrania
+DELETE_SURE,Wirklich alle löschen?,Really delete all?,确定全部删除？,Vraiment tout supprimer ?,¿Borrar todo de verdad?,Apagar tudo mesmo?,本当にすべて削除しますか？,Точно удалить все?,Na pewno usunąć wszystko?
+DELETE_DONE,Aufnahmen gelöscht ✓,Recordings deleted ✓,录音已删除 ✓,Enregistrements supprimés ✓,Grabaciones borradas ✓,Gravações apagadas ✓,録音を削除しました ✓,Записи удалены ✓,Nagrania usunięte ✓
+RESET,Garten neu beginnen,Start a new garden,重新开始花园,Recommencer le jardin,Empezar un jardín nuevo,Começar um jardim novo,庭を最初から,Начать сад заново,Zacznij nowy ogród
+RESET_SURE,Wirklich alles leeren?,Really clear everything?,确定清空全部？,Vraiment tout effacer ?,¿Vaciar todo de verdad?,Limpar tudo mesmo?,本当にすべて消しますか？,Точно очистить все?,Na pewno wyczyścić wszystko?
+RESET_DONE,Garten ist leer ✓,Garden is empty ✓,花园已清空 ✓,Le jardin est vide ✓,El jardín está vacío ✓,O jardim está vazio ✓,庭はからっぽです ✓,Сад пуст ✓,Ogród jest pusty ✓
+LANGUAGE,Sprache,Language,语言,Langue,Idioma,Idioma,言語,Язык,Język
+SEASON,Jahreszeit,Season,季节,Saison,Estación,Estação,季節,Время года,Pora roku
+SEASON_AUTO,Wechselt jeden Tag,Changes every day,每天变换,Change chaque jour,Cambia cada día,Muda todo dia,毎日かわる,Меняется каждый день,Zmienia się co dzień
+SPRING,Frühling,Spring,春天,Printemps,Primavera,Primavera,春,Весна,Wiosna
+SUMMER,Sommer,Summer,夏天,Été,Verano,Verão,夏,Лето,Lato
+AUTUMN,Herbst,Autumn,秋天,Automne,Otoño,Outono,秋,Осень,Jesień
+WINTER,Winter,Winter,冬天,Hiver,Invierno,Inverno,冬,Зима,Zima
+HL_VOICE,Deine Stimme lässt es wachsen,Your voice makes it grow,你的声音让它长大,Ta voix le fait pousser,Tu voz lo hace crecer,Sua voz faz crescer,きみの声で育つよ,Твой голос растит их,"Twój głos sprawia, że rośnie"
+HL_NIGHT,"Gute Nacht, Garten","Good night, garden",晚安，花园,"Bonne nuit, jardin","Buenas noches, jardín","Boa noite, jardim",おやすみ、お庭,"Спокойной ночи, сад","Dobranoc, ogrodzie"
+HL_CONCERT,Ein Konzert aus Kinderstimmen,A concert of children's voices,孩子声音的音乐会,Un concert de voix d'enfants,Un concierto de voces infantiles,Um concerto de vozes infantis,子どもの声のコンサート,Концерт детских голосов,Koncert dziecięcych głosów
+HL_RAINBOW,"Sonne, Regen, Regenbogen","Sun, rain, rainbow",阳光、雨、彩虹,"Soleil, pluie, arc-en-ciel","Sol, lluvia, arcoíris","Sol, chuva, arco-íris",晴れ、雨、にじ,"Солнце, дождь, радуга","Słońce, deszcz, tęcza"
+HL_SEASONS,Vier Jahreszeiten,Four seasons,四季,Quatre saisons,Cuatro estaciones,Quatro estações,四つの季節,Четыре времени года,Cztery pory roku
+HL_ECHO,Hör zu – und sing nach!,Listen – and sing it back!,听一听，再唱一遍！,Écoute – et chante pareil !,¡Escucha y repítelo cantando!,Escute – e cante de volta!,きいて、まねして歌おう！,Послушай и спой так же!,Posłuchaj i zaśpiewaj!
+HL_PARENTS,Für Eltern gemacht,Made for parents,为家长设计,Pensé pour les parents,Pensado para padres,Feito para os pais,保護者のために,Создано для родителей,Stworzone dla rodziców
+BADGE_OFFLINE,Offline,Offline,离线,Hors ligne,Sin conexión,Offline,オフライン,Офлайн,Offline
+BADGE_NOADS,Ohne Werbung,No ads,无广告,Sans pub,Sin anuncios,Sem anúncios,広告なし,Без рекламы,Bez reklam
+BADGE_PRIVATE,Aufnahmen bleiben auf dem Gerät,Recordings stay on the device,录音只存在设备上,Les enregistrements restent sur l'appareil,Las grabaciones se quedan en el dispositivo,As gravações ficam no aparelho,録音は端末の中だけ,Записи остаются на устройстве,Nagrania zostają na urządzeniu

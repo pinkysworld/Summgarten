@@ -14,6 +14,8 @@ var _answer := 0
 const INK := Color("2f2a4a")
 const PAPER := Color("fbf6ee")
 const DANGER := Color("d9534f")
+const LANGS := [["", "Auto"], ["de", "Deutsch"], ["en", "English"], ["zh_CN", "简体中文"], ["fr", "Français"],
+	["es", "Español"], ["pt_BR", "Português (Brasil)"], ["ja", "日本語"], ["ru", "Русский"], ["pl", "Polski"]]
 
 
 func _box_style(bg: Color, radius := 12) -> StyleBoxFlat:
@@ -110,8 +112,8 @@ func _show_gate() -> void:
 	var a := randi_range(6, 9)
 	var b := randi_range(6, 9)
 	_answer = a * b
-	_label("Elternbereich", 30)
-	_label("Bitte lösen: %d × %d = ?" % [a, b])
+	_label(tr("PARENTS"), 30)
+	_label(tr("GATE_Q") % [a, b])
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 16)
@@ -129,7 +131,7 @@ func _show_gate() -> void:
 			else:
 				queue_free())
 		row.add_child(btn)
-	_button("Zurück zum Garten", queue_free)
+	_button(tr("BACK"), queue_free)
 
 
 func _card() -> VBoxContainer:
@@ -175,7 +177,7 @@ func _confirming(b: Button, ask: String, done: String, sig: Signal) -> void:
 
 func _show_settings() -> void:
 	_clear()
-	_label("Elternbereich", 28)
+	_label(tr("PARENTS"), 28)
 	var outer := _box
 
 	# Sound
@@ -186,7 +188,7 @@ func _show_settings() -> void:
 	mic.custom_minimum_size = Vector2(0, 46)
 	mic.add_theme_font_size_override("font_size", 19)
 	var paint_mic := func(on: bool):
-		mic.text = "Mikrofon: an" if on else "Mikrofon: aus – eingebaute Klänge"
+		mic.text = tr("MIC_ON") if on else tr("MIC_OFF")
 		var st := _box_style(Color("4cc3b5") if on else Color("b9b4c4"), 23)
 		for k in ["normal", "hover", "pressed", "hover_pressed"]:
 			mic.add_theme_stylebox_override(k, st)
@@ -199,7 +201,7 @@ func _show_settings() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	var vl := Label.new()
-	vl.text = "Lautstärke"
+	vl.text = tr("VOLUME")
 	vl.add_theme_font_size_override("font_size", 17)
 	vl.add_theme_color_override("font_color", INK)
 	row.add_child(vl)
@@ -218,14 +220,14 @@ func _show_settings() -> void:
 
 	# Play time and concert
 	_box = _card()
-	_label("Der Garten schläft ein nach", 17)
+	_label(tr("SLEEP_AFTER"), 17)
 	var chips := HBoxContainer.new()
 	chips.alignment = BoxContainer.ALIGNMENT_CENTER
 	chips.add_theme_constant_override("separation", 8)
 	var group := ButtonGroup.new()
 	for m in [4, 6, 10, 15]:
 		var chip := Button.new()
-		chip.text = "%d Min" % m
+		chip.text = tr("MINUTES") % m
 		chip.toggle_mode = true
 		chip.button_group = group
 		chip.custom_minimum_size = Vector2(96, 40)
@@ -241,28 +243,75 @@ func _show_settings() -> void:
 			changed.emit(settings))
 		chips.add_child(chip)
 	_box.add_child(chips)
-	var exp := _button("Konzert als Audiodatei speichern", func(): pass)
+	var exp := _button(tr("SAVE_CONCERT"), func(): pass)
 	var exp_info := _label("", 14)
 	exp_info.visible = false
 	exp.pressed.connect(func():
 		var path: String = exporter.call() if exporter.is_valid() else ""
 		exp_info.visible = true
-		exp_info.text = "Noch keine Wesen im Garten." if path.is_empty() else "Gespeichert: " + path)
+		exp_info.text = tr("NO_BEINGS") if path.is_empty() else tr("SAVED") % path)
+
+	# Language and season
+	_box = _card()
+	var lang_row := HBoxContainer.new()
+	lang_row.add_theme_constant_override("separation", 10)
+	var ll := Label.new()
+	ll.text = tr("LANGUAGE")
+	ll.add_theme_font_size_override("font_size", 17)
+	ll.add_theme_color_override("font_color", INK)
+	lang_row.add_child(ll)
+	var lang := OptionButton.new()
+	lang.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lang.add_theme_font_size_override("font_size", 17)
+	for i in LANGS.size():
+		lang.add_item(LANGS[i][1])
+		if LANGS[i][0] == settings.get("lang", ""):
+			lang.select(i)
+	lang.item_selected.connect(func(idx):
+		settings.lang = LANGS[idx][0]
+		changed.emit(settings)
+		_show_settings.call_deferred())
+	lang_row.add_child(lang)
+	_box.add_child(lang_row)
+	_label(tr("SEASON"), 17)
+	var seasons := HBoxContainer.new()
+	seasons.alignment = BoxContainer.ALIGNMENT_CENTER
+	seasons.add_theme_constant_override("separation", 6)
+	var sg := ButtonGroup.new()
+	var names := ["SEASON_AUTO", "SPRING", "SUMMER", "AUTUMN", "WINTER"]
+	for i in names.size():
+		var chip := Button.new()
+		chip.text = tr(names[i])
+		chip.toggle_mode = true
+		chip.button_group = sg
+		chip.custom_minimum_size = Vector2(0, 38)
+		chip.add_theme_font_size_override("font_size", 15)
+		chip.add_theme_stylebox_override("normal", _box_style(Color("d8d1c5"), 19))
+		chip.add_theme_stylebox_override("hover", _box_style(Color("cbc3b5"), 19))
+		chip.add_theme_stylebox_override("pressed", _box_style(Color("4cc3b5"), 19))
+		chip.add_theme_stylebox_override("hover_pressed", _box_style(Color("4cc3b5"), 19))
+		chip.add_theme_color_override("font_color", INK)
+		chip.button_pressed = int(settings.get("season", -1)) == i - 1
+		chip.pressed.connect(func():
+			settings.season = i - 1
+			changed.emit(settings))
+		seasons.add_child(chip)
+	_box.add_child(seasons)
 
 	# Trust + quiet destructive actions
 	_box = outer
-	_label("Offline · Keine Werbung · Keine Datenerhebung · Aufnahmen bleiben auf diesem Gerät", 14)
+	_label(tr("TRUST"), 14)
 	var sep := HSeparator.new()
 	_box.add_child(sep)
 	var links := HBoxContainer.new()
 	links.alignment = BoxContainer.ALIGNMENT_CENTER
 	links.add_theme_constant_override("separation", 18)
 	_box.add_child(links)
-	var del := _link("Aufnahmen löschen")
+	var del := _link(tr("DELETE_REC"))
 	del.reparent(links)
-	_confirming(del, "Wirklich alle löschen?", "Aufnahmen gelöscht ✓", delete_recordings)
-	var clr := _link("Garten neu beginnen")
+	_confirming(del, tr("DELETE_SURE"), tr("DELETE_DONE"), delete_recordings)
+	var clr := _link(tr("RESET"))
 	clr.reparent(links)
-	_confirming(clr, "Wirklich alles leeren?", "Garten ist leer ✓", clear_garden)
-	_button("Zurück zum Garten", queue_free)
+	_confirming(clr, tr("RESET_SURE"), tr("RESET_DONE"), clear_garden)
+	_button(tr("BACK"), queue_free)
 	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)

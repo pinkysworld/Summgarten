@@ -26,7 +26,7 @@ var weather := Weather.NONE
 var day_time := 0.0
 var beds: Array = [] ## creature node or null per bed
 var bed_data: Array = [] ## saved description per bed or null
-var settings := {"mic": true, "volume": 0.8, "day_minutes": 6}
+var settings := {"mic": true, "volume": 0.8, "day_minutes": 6, "lang": "", "season": -1}
 
 var _rec_bed := -1
 var _rec_time := 0.0
@@ -86,6 +86,7 @@ func _ready() -> void:
 	add_child(_overlay)
 	_load()
 	Audio.set_volume(settings.volume)
+	_apply_language()
 	_greet()
 
 
@@ -938,6 +939,7 @@ func _open_parent_gate() -> void:
 func _on_settings_changed(s: Dictionary) -> void:
 	settings = s
 	Audio.set_volume(settings.volume)
+	_apply_language()
 	_save()
 
 
@@ -969,6 +971,11 @@ func _remove_bed(i: int) -> void:
 		beds[i].queue_free()
 	beds[i] = null
 	bed_data[i] = null
+
+
+func _apply_language() -> void:
+	var lang: String = settings.get("lang", "")
+	TranslationServer.set_locale(lang if lang != "" else OS.get_locale())
 
 
 # ---------------------------------------------------------------- save

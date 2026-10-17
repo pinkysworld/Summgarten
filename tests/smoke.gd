@@ -40,6 +40,14 @@ func _ready() -> void:
 	main._panel._show_settings()
 	await get_tree().create_timer(0.3).timeout
 	await _shot(out + "/parents.png")
+	main.settings.lang = "zh_CN"
+	main._apply_language()
+	main._panel.settings = main.settings
+	main._panel._show_settings()
+	await get_tree().create_timer(0.3).timeout
+	await _shot(out + "/parents_zh.png")
+	main.settings.lang = ""
+	main._apply_language()
 	main._panel.queue_free()
 	main.state = main.State.DAY
 	main.day_time = main.day_length()
