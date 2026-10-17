@@ -21,7 +21,7 @@ const BTN_PARENT := Vector2(1240, 200)
 const BTN_HELP := Vector2(1240, 268)
 const BTN_ECHO := Vector2(95, 235)
 const BTN_R := 56.0
-const CAN_HOME := Vector2(1010, 705)
+const CAN_HOME := Vector2(1010, 688)
 const MAX_GROWTH := 0.25 ## watering makes a being up to 25 % bigger
 
 enum Weather { NONE, SUN, RAIN }
@@ -1114,18 +1114,12 @@ func _draw() -> void:
 		draw_circle(Vector2(420, 110), 40, Color("f6f1c8"))
 		draw_circle(Vector2(441, 96), 35, top.lerp(bottom, 0.2))
 	else:
-		var sun_c := Vector2(400, lerpf(105.0, 330.0, ev))
+		var sun_c := Vector2(560, lerpf(70.0, 330.0, ev))
 		var sun_col := Color("ffe27a").lerp(Color("ff8a4a"), ev)
-		sun_col.a = lerpf(0.35, 1.0, vivid)
+		sun_col.a = lerpf(0.3, 0.75, vivid) # pale: the sun *button* is the one to tap
 		for k in 3:
 			draw_circle(sun_c, 48 + k * 22 + sin(_t * 1.5) * 3, Color(sun_col, 0.10 * sun_col.a))
-		# soft rotating rays
-		for k in 12:
-			var a := _t * 0.08 + k * TAU / 12.0
-			var d1 := Vector2.from_angle(a - 0.07)
-			var d2 := Vector2.from_angle(a + 0.07)
-			draw_colored_polygon(PackedVector2Array([sun_c + d1 * 50, sun_c + d1 * (74 + (k % 2) * 14), sun_c + d2 * (74 + (k % 2) * 14), sun_c + d2 * 50]), Color(sun_col, 0.1 * sun_col.a * (1.0 - ev)))
-		draw_circle(sun_c, 40, sun_col)
+		draw_circle(sun_c, 32, sun_col)
 		draw_circle(sun_c + Vector2(-11, -11), 15, Color(1, 1, 1, 0.3 * sun_col.a))
 
 	# Rainbow after a rainy concert
@@ -1138,7 +1132,7 @@ func _draw() -> void:
 	var cloud_col := Color(1, 1, 1, 0.92).lerp(Color("c9a0b8"), dusk * 0.5).lerp(Color("39406e"), night)
 	cloud_col = cloud_col.lerp(Color("8e98a6"), 1.0 - vivid)
 	# far layer: small, pale, slow (parallax)
-	var far_cloud := Color(cloud_col.lerp(top, 0.35), cloud_col.a * 0.8)
+	var far_cloud := Color(cloud_col.lerp(top, 0.45), cloud_col.a * 0.5)
 	for i in 4:
 		var x := fmod(i * 410.0 + 120.0 + _t * 3.5, 1800.0) - 300.0
 		_draw_cloud(Vector2(x, 150 + fmod(i * 37.0, 60.0)), 0.42 + fmod(i * 0.21, 0.2), far_cloud, i + 7)
@@ -1194,6 +1188,8 @@ func _draw() -> void:
 	var tuft := near.darkened(0.22) if season != Season.WINTER else Color("b9c8d8").lerp(Color("2a3558"), night)
 	for i in 34:
 		var gp := Vector2(fmod(i * 157.0, 1320.0) - 20, 400 + fmod(i * 89.0, 320.0))
+		if _in_rest_zone(gp):
+			continue
 		var sway := sin(_t * 1.3 + i) * 3.0
 		for k in 3:
 			draw_line(gp + Vector2((k - 1) * 4, 0), gp + Vector2((k - 1) * 7 + sway, -12 - k * 3), tuft, 2.5)
@@ -1203,6 +1199,8 @@ func _draw() -> void:
 
 	for i in int(sc[7]):
 		var fp := Vector2(fmod(i * 233.0 + 40.0, 1300.0) - 10, 405 + fmod(i * 131.0, 300.0))
+		if _in_rest_zone(fp):
+			continue
 		var fc: Color = [Color("ff8fb1"), Color("ffe066"), Color("ffffff")][i % 3]
 		var r := 3.0 + fmod(i, 3.0)
 		for q in 4:
@@ -1218,7 +1216,7 @@ func _draw() -> void:
 	_draw_pond(Vector2(1165, 478), top, night)
 	_draw_dragonfly(Vector2(1165, 440), night)
 	_draw_ladybug(Vector2(690, 418), night)
-	for fc in [Vector3(700, 432, 0), Vector3(905, 426, 1), Vector3(292, 452, 2), Vector3(640, 545, 3), Vector3(30, 470, 4)]:
+	for fc in [Vector3(700, 432, 0), Vector3(905, 426, 1), Vector3(452, 418, 2), Vector3(30, 470, 4)]:
 		_draw_flower_cluster(Vector2(fc.x, fc.y), int(fc.z), night)
 
 	# Stones and the watering can
@@ -1227,6 +1225,11 @@ func _draw() -> void:
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z + 3, st.z * 0.6 + 3), stone.darkened(0.45))
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z, st.z * 0.6), stone)
 		draw_arc(Vector2(st.x, st.y), st.z, PI + 0.3, TAU - 0.3, 10, Color(1, 1, 1, 0.35 * (1.0 - night)), 2.0)
+	# the can's home: a round stepping-stone slab, always in the same place
+	var slab := Color("e9dfcf").lerp(Color("3b3d55"), night * 0.8)
+	_draw_ellipse(CAN_HOME + Vector2(0, 6), Vector2(74, 22), slab.darkened(0.35))
+	_draw_ellipse(CAN_HOME + Vector2(0, 2), Vector2(70, 19), slab)
+	draw_arc(CAN_HOME + Vector2(0, 2), 62, PI + 0.5, TAU - 0.5, 12, Color(1, 1, 1, 0.4 * (1.0 - night)), 3.0)
 	if not _can_held:
 		_draw_can(self, CAN_HOME, night, 0.0, _can_hint())
 
@@ -1455,11 +1458,21 @@ func _front_ellipse(c: Vector2, r: Vector2, rot: float) -> PackedVector2Array:
 	return pts
 
 
+## Calm space around every bed and the can's slab: no decoration there,
+## so beings and empty beds read clearly.
+func _in_rest_zone(p: Vector2) -> bool:
+	for i in BED_POSITIONS.size():
+		var d: Vector2 = (p - BED_POSITIONS[i] - Vector2(0, -10)) / (Vector2(170, 70) * BED_SCALE[i])
+		if d.length() < 1.0:
+			return true
+	return (p - CAN_HOME).length() < 95.0
+
+
 func set_season(s_: int) -> void:
 	season = s_
 	_season_parts.clear()
 	if season != Season.SUMMER:
-		var n := 50 if season == Season.WINTER else 18
+		var n := 30 if season == Season.WINTER else 10
 		for i in n:
 			_season_parts.append([Vector2(randf() * 1400 - 60, randf() * 760), randf() * TAU])
 	for c in beds:
@@ -1611,11 +1624,18 @@ func _draw_pond(c: Vector2, sky: Color, night: float) -> void:
 		draw_arc(rc, 4 + ph * 18, 0, TAU, 20, Color(1, 1, 1, 0.5 * (1.0 - ph)), 1.5, true)
 
 
-func _draw_can(ci: CanvasItem, at: Vector2, night: float, rot := 0.0, glow := 0.0) -> void:
+func _draw_can(ci: CanvasItem, at: Vector2, night: float, rot := 0.0, glow := 0.0, held := false) -> void:
 	var c := Color("6fa8e8").lerp(Color("2a3558"), night * 0.8)
 	var ink := c.darkened(0.55)
 	ci.draw_set_transform(at, rot, Vector2.ONE)
 	var o := Vector2.ZERO
+	if held:
+		# white sticker outline so the tool reads clearly over anything
+		var halo := PackedVector2Array([o + Vector2(-42, 6), o + Vector2(-36, -68), o + Vector2(38, -68), o + Vector2(42, 6)])
+		ci.draw_colored_polygon(halo, Color.WHITE)
+		ci.draw_line(o + Vector2(-30, -30), o + Vector2(-76, -68), Color.WHITE, 18.0)
+		ci.draw_circle(o + Vector2(-80, -70), 17, Color.WHITE)
+		ci.draw_arc(o + Vector2(0, -62), 24, PI, TAU, 16, Color.WHITE, 14.0, true)
 	if glow > 0.0:
 		ci.draw_circle(o + Vector2(10, -35), 66 + sin(_t * 4.0) * 4.0, Color(1, 0.95, 0.6, 0.25 * glow))
 	ci.draw_line(o + Vector2(-30, -30), o + Vector2(-74, -66), ink, 10.0)
@@ -1644,8 +1664,7 @@ func _draw_overlay() -> void:
 			_overlay.draw_circle(dr[0] + Vector2(-2, -2), 2.2, Color(1, 1, 1, 0.8 - float(dr[2])))
 	if _can_held:
 		var tilt := -0.55 * clampf(_pour * 3.0, 0.0, 1.0) if _pour > 0.0 else sin(_t * 3.0) * 0.06
-		_overlay.draw_circle(_can_pos + Vector2(0, 30), 40, Color(0, 0, 0, 0.12))
-		_draw_can(_overlay, _can_pos + Vector2(0, 30), 0.0, tilt)
+		_draw_can(_overlay, _can_pos + Vector2(0, 30), 0.0, tilt, 0.0, true)
 	for fl in _flashes:
 		var u: float = fl[1] / 0.12
 		_overlay.draw_circle(fl[0], 60.0 * minf(u, 1.0), Color(1, 1, 1, 0.5 * (1.0 - minf(fl[1] / 0.2, 1.0))))
@@ -1831,10 +1850,10 @@ func _draw_windmill(base: Vector2, hill: Color, night: float) -> void:
 func _draw_birds(night: float) -> void:
 	if night > 0.2 or weather == Weather.RAIN:
 		return
-	var period := 38.0
-	var u := fmod(_t + 9.0, period) / 14.0 # crossing takes 14 s, then a pause
-	if u > 1.0:
+	var cyc := fmod(_t + 20.0, 120.0)
+	if cyc < 75.0 or cyc > 89.0:
 		return
+	var u := (cyc - 75.0) / 14.0 # crossing takes 14 s
 	var lead := Vector2(lerpf(-80.0, 1360.0, u), 175.0 - sin(u * PI) * 50.0)
 	var ink := Color("3a3550", 0.75 * (1.0 - night * 4.0))
 	for i in 5:
@@ -1847,9 +1866,11 @@ func _draw_birds(night: float) -> void:
 
 ## A hot-air balloon drifting very slowly across the far sky.
 func _draw_balloon(night: float, vivid: float) -> void:
-	var x := fmod(_t * 6.0 + 900.0, 2200.0) - 300.0
-	if x > 1350.0:
+	# one sky event at a time: balloon first, birds later in the 120 s cycle
+	var cyc := fmod(_t + 20.0, 120.0)
+	if cyc > 60.0:
 		return
+	var x := lerpf(-60.0, 1340.0, cyc / 60.0)
 	var c := Vector2(x, 120.0 + sin(_t * 0.4) * 10.0)
 	var cols := [Color("ff8fb8"), Color("ffd45c"), Color("4cc3b5"), Color("ffd45c")]
 	var dim := night * 0.7 + (1.0 - vivid) * 0.3
