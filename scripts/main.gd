@@ -92,6 +92,12 @@ var _pour := 0.0 ## seconds left of the pouring animation
 var _pour_drops: Array = [] ## [pos, vel, age]
 var _water_save := 0.0
 var _ev_smooth := 0.0
+var _paper_mat: ShaderMaterial
+var _stage_light := 0.0 ## concert: dim the edges, spotlight the singers
+var _cam := Camera2D.new()
+var _cam_target := Vector2(640, 360)
+var _cam_zoom := 1.0
+var _spots: Array = [] ## [world pos, alpha, width] spotlights on singers
 var _song_rings: Array = [] ## [age, colour] pond rings, one per sung note
 var _beat_kick := 0.0 ## flowers and grass nod on the beat
 var _season_fade := 0.0 ## paper wash when the season changes
@@ -141,6 +147,7 @@ func _ready() -> void:
 	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/paper.gdshader")
+	_paper_mat = mat
 	rect.material = mat
 	paper.add_child(rect)
 	add_child(paper)
@@ -154,6 +161,9 @@ func _ready() -> void:
 	_front.z_index = 9
 	_front.draw.connect(_draw_front)
 	add_child(_front)
+	_cam.position = Vector2(640, 360)
+	add_child(_cam)
+	_cam.make_current()
 	_overlay.z_index = 10
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
@@ -463,20 +473,35 @@ func _concert() -> void:
 	state = State.CONCERT
 	var beat := 60.0 / _bpm()
 	var singers := beds.filter(func(c): return c != null)
-	# Round 1: one after another, like a melody.
+	# the stage: edges dim, the camera leans in
+	create_tween().tween_property(self, "_stage_light", 1.0, 0.6)
+	_cam_zoom = 1.035
+	await get_tree().create_timer(0.5).timeout
+	# Round 1: one after another, like a melody; spotlight and camera follow.
 	for c in singers:
 		if is_instance_valid(c):
+			_spotlight(c)
+			_cam_target = Vector2(640, 360).lerp(c.global_position + Vector2(0, -80), 0.12)
 			c.sing(_shift())
 		await get_tree().create_timer(beat).timeout
 	# Round 2: in pairs, like little chords.
 	for k in range(0, singers.size(), 2):
-		for c in singers.slice(k, k + 2):
+		var mid := Vector2.ZERO
+		var pair := singers.slice(k, k + 2)
+		for c in pair:
 			if is_instance_valid(c):
+				_spotlight(c)
+				mid += c.global_position / pair.size()
 				c.sing(_shift())
+		_cam_target = Vector2(640, 360).lerp(mid + Vector2(0, -80), 0.1)
 		await get_tree().create_timer(beat).timeout
-	# Finale: everyone together, then a bow and fireworks.
+	# Finale: everyone together, lights up, wide shot, then fireworks.
+	_cam_target = Vector2(640, 360)
+	_cam_zoom = 1.0
+	create_tween().tween_property(self, "_stage_light", 0.0, 0.4)
 	for c in singers:
 		if is_instance_valid(c):
+			_spotlight(c)
 			c.sing(_shift())
 	_fireworks()
 	if weather == Weather.RAIN:
@@ -491,8 +516,14 @@ func _concert() -> void:
 		if is_instance_valid(singers[i]):
 			singers[i].celebrate_hop(i * 0.08)
 	await get_tree().create_timer(0.8).timeout
+	_cam_target = Vector2(640, 360)
+	_cam_zoom = 1.0
 	if state == State.CONCERT:
 		state = State.DAY
+
+
+func _spotlight(c: Node2D) -> void:
+	_spots.append([c.global_position, 1.0, c.radius() + 40.0])
 
 
 ## Echo game: creatures sing a short phrase, the child sings it back (microphone)
@@ -837,7 +868,13 @@ func _process(delta: float) -> void:
 		fl[1] += delta
 	_flashes = _flashes.filter(func(fl): return fl[1] < 0.2)
 	_shake = move_toward(_shake, 0.0, delta * 20.0)
-	position = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake
+	_cam.offset = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake
+	_cam.position = _cam.position.lerp(_cam_target, minf(1.0, delta * 2.2))
+	var z := lerpf(_cam.zoom.x, _cam_zoom, minf(1.0, delta * 2.0))
+	_cam.zoom = Vector2(z, z)
+	for sp in _spots:
+		sp[1] = maxf(0.0, sp[1] - delta * 0.9)
+	_spots = _spots.filter(func(sp): return sp[1] > 0.0)
 	if state == State.RECORDING:
 		_rec_time += delta
 		if _rec_time >= Audio.RECORD_SECONDS:
@@ -1407,6 +1444,8 @@ func _draw_front() -> void:
 			var w: float = (c.radius() + 34.0) if c else 120.0 * BED_SCALE[i]
 			_sticker_ring(BED_POSITIONS[i] + Vector2(0, -h * 0.5 + 6), Vector2(w, h * 0.5 + 40) * pulse)
 	# parent button: small but clearly visible padlock
+	if state == State.CONCERT:
+		return # the stage belongs to the singers (and the zoom would cut these)
 	_small_stone(BTN_PARENT, Color("fbf6ee"))
 	_front.draw_arc(BTN_PARENT + Vector2(0, -4), 8, PI, TAU, 12, Color("2f2a4a"), 4.0, true)
 	_front.draw_rect(Rect2(BTN_PARENT + Vector2(-11, -4), Vector2(22, 16)), Color("2f2a4a"))
@@ -1511,6 +1550,16 @@ func _tick_light() -> void:
 	var night := clampf(ev * 2.0 - 1.0, 0.0, 1.0)
 	var dusk := clampf(ev * 2.0, 0.0, 1.0) * (1.0 - night)
 	var tint := Color.WHITE.lerp(Color(1.0, 0.86, 0.74), dusk * 0.7).lerp(Color(0.6, 0.66, 0.92), night * 0.75)
+	if _paper_mat:
+		# season and time of day grade the whole picture, sky and ground included
+		var sh: Vector3 = [Vector3(0.0, 0.0, 0.02), Vector3(-0.01, 0.0, 0.02), Vector3(0.02, -0.01, 0.02), Vector3(-0.02, 0.0, 0.05)][season]
+		var li: Vector3 = [Vector3(0.03, 0.01, 0.02), Vector3(0.03, 0.02, -0.01), Vector3(0.05, 0.025, -0.02), Vector3(0.0, 0.01, 0.03)][season]
+		sh = sh.lerp(Vector3(0.03, -0.01, 0.06), dusk).lerp(Vector3(-0.02, 0.0, 0.06), night)
+		li = li.lerp(Vector3(0.08, 0.02, -0.03), dusk).lerp(Vector3(0.0, 0.01, 0.04), night)
+		_paper_mat.set_shader_parameter("grade_shadow", sh)
+		_paper_mat.set_shader_parameter("grade_light", li)
+		_paper_mat.set_shader_parameter("grade_amount", 1.0)
+		_paper_mat.set_shader_parameter("vignette", 1.0 + _stage_light * 1.6)
 	for c in beds:
 		if c:
 			c.light = tint
@@ -1714,6 +1763,7 @@ func _draw_can(ci: CanvasItem, at: Vector2, night: float, rot := 0.0, glow := 0.
 
 
 func _draw_overlay() -> void:
+	_draw_spots()
 	if _season_fade > 0.0:
 		_overlay.draw_rect(Rect2(-100, -100, 1480, 920), Color(0.99, 0.97, 0.92, 0.85 * _season_fade * _season_fade))
 	_draw_help()
@@ -1761,6 +1811,19 @@ func _draw_overlay() -> void:
 
 
 ## Small round buttons in the same painted style as the big ones.
+## Warm stage light cones from above onto the singing beings.
+func _draw_spots() -> void:
+	for sp in _spots:
+		var p: Vector2 = sp[0]
+		var a: float = sp[1]
+		var w: float = sp[2]
+		var top := Vector2(p.x + (640.0 - p.x) * 0.2, -40)
+		for k in 3:
+			var ww := w * (1.0 + k * 0.25)
+			_overlay.draw_colored_polygon(PackedVector2Array([top + Vector2(-14 - k * 8, 0), top + Vector2(14 + k * 8, 0), p + Vector2(ww, 10), p + Vector2(-ww, 10)]), Color(1, 0.95, 0.75, 0.11 * a))
+		_overlay.draw_colored_polygon(_ellipse_pts(p + Vector2(0, 6), Vector2(w * 1.1, 26), 32), Color(1, 0.95, 0.7, 0.22 * a))
+
+
 func _small_stone(c: Vector2, col: Color) -> void:
 	_front.draw_circle(c + Vector2(0, 5), 28, Color(0, 0, 0, 0.22))
 	_front.draw_circle(c, 28, Color("3a2e4a"))

@@ -22,6 +22,10 @@ func _box_style(bg: Color, radius := 12) -> StyleBoxFlat:
 	var st := StyleBoxFlat.new()
 	st.bg_color = bg
 	st.set_corner_radius_all(radius)
+	# painted-stone look like the garden buttons: dark rim, deeper bottom edge
+	st.border_color = bg.darkened(0.45)
+	st.set_border_width_all(2)
+	st.border_width_bottom = 5
 	st.set_content_margin_all(10)
 	st.content_margin_left = 18
 	st.content_margin_right = 18
@@ -77,7 +81,7 @@ func _make_theme() -> Theme:
 func _ready() -> void:
 	layer = 10
 	var dim := ColorRect.new()
-	dim.color = Color(0, 0, 0, 0.55)
+	dim.color = Color(0.12, 0.07, 0.18, 0.55)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 	var center := CenterContainer.new()
@@ -87,11 +91,25 @@ func _ready() -> void:
 	panel.custom_minimum_size = Vector2(580, 0)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("fbf7ee")
-	style.set_corner_radius_all(18)
+	style.set_corner_radius_all(22)
+	style.border_color = Color("3a2e4a")
+	style.set_border_width_all(4)
+	style.shadow_color = Color(0, 0, 0, 0.3)
+	style.shadow_size = 10
+	style.shadow_offset = Vector2(0, 6)
 	style.set_content_margin_all(22)
 	panel.add_theme_stylebox_override("panel", style)
 	panel.theme = _make_theme()
 	center.add_child(panel)
+	# same paper and brush treatment as the garden
+	var paper := ColorRect.new()
+	paper.set_anchors_preset(Control.PRESET_FULL_RECT)
+	paper.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/paper.gdshader")
+	mat.set_shader_parameter("vignette", 0.0)
+	paper.material = mat
+	add_child.call_deferred(paper)
 	_box = VBoxContainer.new()
 	_box.add_theme_constant_override("separation", 8)
 	panel.add_child(_box)
