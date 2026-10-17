@@ -63,6 +63,9 @@ var _btn_alpha := 1.0
 var _flashes: Array = [] ## [pos, age]
 var _shake := 0.0
 var hide_ui := false
+var _pad_active := false
+var _focus := 4
+var _stick_time := -1.0
 # Echo game ("sing it back")
 var _echo_listen := false
 var _mic_pos := Vector2.ZERO
@@ -117,9 +120,79 @@ func _ready() -> void:
 # ---------------------------------------------------------------- input
 
 func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and (event.keycode == KEY_F11 or (event.keycode == KEY_ENTER and event.alt_pressed)):
+		var full := DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if full else DisplayServer.WINDOW_MODE_FULLSCREEN)
+		return
+	if _pad_input(event):
+		return
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
-	var p := get_global_mouse_position()
+	_pad_active = false
+	_press_at(get_global_mouse_position())
+
+
+# ---------------------------------------------------------------- gamepad (Steam Deck)
+
+## Points a gamepad can select: the round buttons and every bed.
+func _focus_targets() -> Array:
+	var t := [BTN_CONDUCTOR, BTN_ECHO, BTN_SUN, BTN_RAIN]
+	for i in BED_POSITIONS.size():
+		var c = beds[i]
+		t.append(BED_POSITIONS[i] + Vector2(0, -c.height() * 0.5) if c else BED_POSITIONS[i] + Vector2(0, -10))
+	return t
+
+
+func _pad_input(event: InputEvent) -> bool:
+	var dir := Vector2.ZERO
+	if event is InputEventJoypadButton and event.pressed:
+		match event.button_index:
+			JOY_BUTTON_A:
+				_pad_active = true
+				_press_at(_focus_targets()[_focus])
+				return true
+			JOY_BUTTON_START:
+				_open_parent_gate()
+				return true
+			JOY_BUTTON_DPAD_LEFT: dir = Vector2.LEFT
+			JOY_BUTTON_DPAD_RIGHT: dir = Vector2.RIGHT
+			JOY_BUTTON_DPAD_UP: dir = Vector2.UP
+			JOY_BUTTON_DPAD_DOWN: dir = Vector2.DOWN
+	elif event is InputEventJoypadMotion and absf(event.axis_value) > 0.6 and event.axis <= JOY_AXIS_LEFT_Y:
+		if _t - _stick_time < 0.25:
+			return true
+		_stick_time = _t
+		dir = Vector2(signf(event.axis_value), 0) if event.axis == JOY_AXIS_LEFT_X else Vector2(0, signf(event.axis_value))
+	if dir == Vector2.ZERO:
+		return false
+	_pad_active = true
+	_move_focus(dir)
+	return true
+
+
+## Picks the nearest target roughly in the pressed direction.
+func _move_focus(dir: Vector2) -> void:
+	var targets := _focus_targets()
+	var from: Vector2 = targets[_focus]
+	var best := -1
+	var best_score := INF
+	for i in targets.size():
+		if i == _focus:
+			continue
+		var d: Vector2 = targets[i] - from
+		var along := d.dot(dir)
+		if along <= 10.0:
+			continue
+		var score := along + absf(d.cross(dir)) * 2.0
+		if score < best_score:
+			best_score = score
+			best = i
+	if best >= 0:
+		_focus = best
+		Audio.play_music(_plop, 4.0 + _shift(), -6.0)
+
+
+func _press_at(p: Vector2) -> void:
 	for btn in [BTN_CONDUCTOR, BTN_SUN, BTN_RAIN, BTN_ECHO]:
 		if p.distance_to(btn) < BTN_R:
 			_presses[btn] = _t
@@ -857,14 +930,15 @@ func _draw_front() -> void:
 	var leaf2 := Color("4f9442").lerp(Color("15302a"), night)
 	# corner foliage frames the scene like a picture book
 	var sw := sin(_t * 0.9) * 0.04
+	var dy := get_viewport_rect().size.y - 720.0 # keep framing on the real bottom edge (16:10 Steam Deck)
 	for l in [Vector4(-30, 760, -1.2, 150), Vector4(20, 770, -0.8, 120), Vector4(-40, 700, -1.5, 110),
 			Vector4(1310, 760, -1.95, 150), Vector4(1260, 775, -2.35, 120), Vector4(1320, 690, -1.65, 105)]:
-		_front_leaf(Vector2(l.x, l.y), l.z + sw, l.w, leaf if int(l.w) % 2 == 0 else leaf2)
+		_front_leaf(Vector2(l.x, l.y + dy), l.z + sw, l.w, leaf if int(l.w) % 2 == 0 else leaf2)
 	for i in 18:
 		var x := -20.0 + i * 78.0
 		var h := 26.0 + fmod(i * 37.0, 22.0)
 		var s := sin(_t * 1.2 + i) * 4.0
-		_front.draw_colored_polygon(PackedVector2Array([Vector2(x - 12, 740), Vector2(x + s, 740 - h), Vector2(x + 12, 740)]), leaf2)
+		_front.draw_colored_polygon(PackedVector2Array([Vector2(x - 12, 740 + dy), Vector2(x + s, 740 + dy - h), Vector2(x + 12, 740 + dy)]), leaf2)
 
 	# front lip of each occupied bed, so beings stand *in* the soil
 	for i in BED_POSITIONS.size():
@@ -920,6 +994,12 @@ func _draw_front() -> void:
 	_draw_cloud_icon(BTN_RAIN)
 	_draw_button(BTN_ECHO, Color("b58cf0"), (_creature_count() >= 2 and state == State.DAY) or state == State.ECHO, state == State.ECHO)
 	_draw_ear_icon(BTN_ECHO)
+	if _pad_active and _panel == null:
+		var fp: Vector2 = _focus_targets()[_focus]
+		var r: float = BTN_R + 12.0 if _focus < 4 else 70.0 * BED_SCALE[_focus - 4]
+		var pulse := 1.0 + 0.05 * sin(_t * 6.0)
+		_front.draw_arc(fp, r * pulse, 0, TAU, 48, Color("2f2a4a"), 10.0, true)
+		_front.draw_arc(fp, r * pulse, 0, TAU, 48, Color("fff3a0"), 6.0, true)
 	# parent button: small but clearly visible padlock
 	_front.draw_circle(BTN_PARENT + Vector2(0, 3), 24, Color(0, 0, 0, 0.15))
 	_front.draw_circle(BTN_PARENT, 24, Color("fbf6ee"))

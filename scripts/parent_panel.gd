@@ -35,7 +35,12 @@ func _make_theme() -> Theme:
 		th.set_stylebox("hover", type, _box_style(INK.lightened(0.15)))
 		th.set_stylebox("pressed", type, _box_style(INK.darkened(0.2)))
 		th.set_stylebox("disabled", type, _box_style(Color("b9b4c4")))
-		th.set_stylebox("focus", type, StyleBoxEmpty.new())
+		var focus := StyleBoxFlat.new()
+		focus.draw_center = false
+		focus.border_color = Color("ffc93c")
+		focus.set_border_width_all(4)
+		focus.set_corner_radius_all(14)
+		th.set_stylebox("focus", type, focus)
 		for c in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 			th.set_color(c, type, PAPER)
 		th.set_color("font_disabled_color", type, PAPER)
@@ -84,6 +89,23 @@ func _ready() -> void:
 func _clear() -> void:
 	for c in _box.get_children():
 		c.queue_free()
+	_focus_first.call_deferred()
+
+
+## Gamepad / keyboard: put focus on the first button so A selects it.
+func _focus_first() -> void:
+	var stack: Array = [_box]
+	while not stack.is_empty():
+		var n: Node = stack.pop_front()
+		if n is BaseButton and not n.is_queued_for_deletion() and n.visible:
+			n.grab_focus()
+			return
+		stack.append_array(n.get_children())
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B:
+		queue_free()
 
 
 func _label(text: String, size := 22) -> Label:
