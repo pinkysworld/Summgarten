@@ -3,7 +3,7 @@
 Für Steam: Kurzbeschreibung (max. 300 Zeichen), Beschreibung, Abschnitt „Für Eltern“, Vertrauens-Siegel.
 Vor dem Upload sollten Muttersprachler die Store-Texte gegenlesen. Die Spieltexte stehen in `i18n/strings.csv`.
 
-**Preis:** Steam 4,99 € · **Siegel für Screenshots/Capsule:** Offline · Ohne Werbung · Aufnahmen bleiben auf dem Gerät
+**Preis:** Steam 9,99 € / 9,99 $ (zum Start 15–20 % Rabatt; im Sale −30 bis −50 %). iPad/iOS später: einmalig 4,99–6,99 €, ohne Abo und In-App-Käufe · **Siegel für Screenshots/Capsule:** Offline · Ohne Werbung · Aufnahmen bleiben auf dem Gerät
 
 **Pädagogik (Belege vor Release ergänzen):** Selbstwirksamkeit, auditive Wahrnehmung (hoch–tief, laut–leise, schnell–langsam), Ursache-Wirkung, frühe Musikalität durch Pentatonik und Imitation (Nachsingen).
 
@@ -12,7 +12,7 @@ Vor dem Upload sollten Muttersprachler die Store-Texte gegenlesen. Die Spieltext
 ## Deutsch
 **Kurz:** Dein Kind komponiert mit seiner eigenen Stimme. Summen, Lachen, Klatschen – jedes Geräusch lässt ein singendes Wesen wachsen. Ohne Text, ohne Scheitern, ohne Werbung.
 
-**Beschreibung:** Im Klanggarten wird die Stimme deines Kindes zum Samen. Aus hohen Tönen wachsen Blumen, aus tiefen dicke Pilze und Kürbisse, laute Klänge werden zu großen, leise zu kleinen Wesen. Jedes Wesen singt den Klang deines Kindes zurück – automatisch passend gestimmt, sodass alles zusammen wie ein kleines Orchester klingt. Mit dem Dirigentenstab spielt der ganze Garten ein Konzert mit Feuerwerk. Sonne macht alles heller und schneller, Regen tiefer und langsamer – danach kommt der Regenbogen. Im Nachsing-Spiel singt ein Wesen vor, und dein Kind antwortet. Vier Jahreszeiten verwandeln den Garten. Nach ein paar Minuten wird es Abend und alle schlafen ein – ein sanftes Ende.
+**Beschreibung:** Im Klanggarten wird die Stimme deines Kindes zum Samen. Aus hohen Tönen wachsen Blumen, aus tiefen dicke Pilze und Kürbisse, laute Klänge werden zu großen, leise zu kleinen Wesen. Jedes Wesen singt den Klang deines Kindes zurück – automatisch passend gestimmt, sodass alles zusammen wie ein kleines Orchester klingt. Mit dem Dirigentenstab spielt der ganze Garten ein Konzert mit Feuerwerk. Sonne macht alles heller und schneller, Regen tiefer und langsamer – danach kommt der Regenbogen. Im Nachsing-Spiel singt ein Wesen vor, und dein Kind antwortet. Vier Jahreszeiten verwandeln den Garten, und wer seine Pflanzen gießt, sieht sie wachsen. Nach ein paar Minuten wird es Abend und alle schlafen ein – ein sanftes Ende.
 
 **Für Eltern:**
 - Für 3–6 Jahre, ganz ohne Lesen, ohne Punkte und ohne Zeitdruck
