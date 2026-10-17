@@ -6,6 +6,7 @@ signal delete_recordings
 signal clear_garden
 
 var settings := {}
+var exporter: Callable ## returns the saved file path or ""
 var _box: VBoxContainer
 var _answer := 0
 
@@ -24,11 +25,11 @@ func _ready() -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("fbf7ee")
 	style.set_corner_radius_all(18)
-	style.set_content_margin_all(28)
+	style.set_content_margin_all(22)
 	panel.add_theme_stylebox_override("panel", style)
 	center.add_child(panel)
 	_box = VBoxContainer.new()
-	_box.add_theme_constant_override("separation", 14)
+	_box.add_theme_constant_override("separation", 8)
 	panel.add_child(_box)
 	_show_gate()
 
@@ -52,8 +53,8 @@ func _label(text: String, size := 22) -> Label:
 func _button(text: String, cb: Callable) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(0, 52)
-	b.add_theme_font_size_override("font_size", 22)
+	b.custom_minimum_size = Vector2(0, 44)
+	b.add_theme_font_size_override("font_size", 20)
 	b.pressed.connect(cb)
 	_box.add_child(b)
 	return b
@@ -92,7 +93,9 @@ func _show_settings() -> void:
 
 	var mic := CheckButton.new()
 	mic.text = "Mikrofon verwenden"
-	mic.add_theme_font_size_override("font_size", 22)
+	mic.add_theme_font_size_override("font_size", 20)
+	for state in ["font_color", "font_pressed_color", "font_hover_color", "font_hover_pressed_color", "font_focus_color"]:
+		mic.add_theme_color_override(state, Color("2b2340"))
 	mic.button_pressed = settings.mic
 	mic.toggled.connect(func(on):
 		settings.mic = on
@@ -100,7 +103,7 @@ func _show_settings() -> void:
 	_box.add_child(mic)
 	_label("Ohne Mikrofon wachsen Wesen mit eingebauten Klängen.", 16)
 
-	_label("Lautstärke", 20)
+	_label("Lautstärke", 18)
 	var vol := HSlider.new()
 	vol.min_value = 0.0
 	vol.max_value = 1.0
@@ -111,6 +114,26 @@ func _show_settings() -> void:
 		settings.volume = v
 		changed.emit(settings))
 	_box.add_child(vol)
+
+	_label("Der Garten schläft ein nach", 18)
+	var day := OptionButton.new()
+	day.add_theme_font_size_override("font_size", 20)
+	for m in [4, 6, 10]:
+		day.add_item("%d Minuten" % m, m)
+	day.select([4, 6, 10].find(int(settings.get("day_minutes", 6))))
+	day.item_selected.connect(func(idx):
+		settings.day_minutes = day.get_item_id(idx)
+		changed.emit(settings))
+	_box.add_child(day)
+
+	var exp := _button("Konzert als Audiodatei speichern", func(): pass)
+	var exp_info := _label("", 15)
+	exp.pressed.connect(func():
+		var path: String = exporter.call() if exporter.is_valid() else ""
+		if path.is_empty():
+			exp_info.text = "Noch keine Wesen im Garten."
+		else:
+			exp_info.text = "Gespeichert: " + path)
 
 	var del := _button("Alle Aufnahmen löschen", func(): pass)
 	del.pressed.connect(func():
@@ -130,5 +153,5 @@ func _show_settings() -> void:
 			clr.text = "Wirklich den ganzen Garten leeren?")
 
 	_label("Aufnahmen bleiben nur auf diesem Gerät. Kein Upload, keine Werbung, keine Analyse.", 15)
-	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 14)
+	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)
 	_button("Zurück zum Garten", queue_free)

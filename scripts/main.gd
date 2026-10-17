@@ -5,7 +5,6 @@ const Creature := preload("res://scripts/creature.gd")
 const ParentPanel := preload("res://scripts/parent_panel.gd")
 
 const SAVE_PATH := "user://garden.json"
-const DAY_LENGTH := 360.0 # seconds until the garden falls asleep
 const BED_POSITIONS := [
 	Vector2(200, 440), Vector2(493, 440), Vector2(787, 440), Vector2(1080, 440),
 	Vector2(200, 665), Vector2(493, 665), Vector2(787, 665), Vector2(1080, 665),
@@ -24,7 +23,7 @@ var weather := Weather.NONE
 var day_time := 0.0
 var beds: Array = [] ## creature node or null per bed
 var bed_data: Array = [] ## saved description per bed or null
-var settings := {"mic": true, "volume": 0.8}
+var settings := {"mic": true, "volume": 0.8, "day_minutes": 6}
 
 var _rec_bed := -1
 var _rec_time := 0.0
@@ -37,6 +36,10 @@ var _beat := 0
 var _bass: AudioStreamWAV
 var _pluck: AudioStreamWAV
 var _plop: AudioStreamWAV
+var _bird: AudioStreamWAV
+var _cricket: AudioStreamWAV
+var _yawn: AudioStreamWAV
+var _amb_timer := 3.0
 var _presses := {} ## button centre -> time pressed
 var _confetti: Array = [] ## [pos, vel, age, color, spin]
 var _overlay := Node2D.new()
@@ -50,7 +53,20 @@ func _ready() -> void:
 		_rain.append(Vector2(randf() * 1400 - 60, randf() * 760))
 	_bass = SoundLab.make_wav(SoundLab.instrument(0, SoundLab.BASE_FREQ / 2.0), 22050)
 	_pluck = SoundLab.make_wav(SoundLab.instrument(1, SoundLab.BASE_FREQ * 2.0), 22050)
+	_bird = SoundLab.make_wav(SoundLab.ambient(0), 22050)
+	_cricket = SoundLab.make_wav(SoundLab.ambient(1), 22050)
+	_yawn = SoundLab.make_wav(SoundLab.ambient(3), 22050)
 	_plop = SoundLab.make_wav(SoundLab.instrument(2, 520.0), 22050)
+	var paper := CanvasLayer.new()
+	paper.layer = 5
+	var rect := ColorRect.new()
+	rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/paper.gdshader")
+	rect.material = mat
+	paper.add_child(rect)
+	add_child(paper)
 	_overlay.z_index = 10
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
@@ -160,6 +176,7 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 	c.setup(pitch, loud, wav, freq)
 	add_child(c)
 	beds[i] = c
+	c.sang.connect(_on_sang)
 	if fresh:
 		c.grow_in()
 		get_tree().create_timer(0.9).timeout.connect(func(): if is_instance_valid(c): c.sing(_shift()))
@@ -222,6 +239,89 @@ func _fireworks() -> void:
 			_confetti.append([origin, Vector2(cos(a), sin(a)) * randf_range(140, 260), -burst * 0.25, cols[(i + burst) % cols.size()], randf() * TAU])
 
 
+## Seconds until the garden falls asleep (parents choose 4, 6 or 10 minutes).
+func day_length() -> float:
+	return float(settings.get("day_minutes", 6)) * 60.0
+
+
+## Renders the garden concert (melody, pairs, finale, soft bass) to a WAV in
+## the user's Documents folder. Returns the path, or "" if nothing to render.
+func export_concert() -> String:
+	var singers := beds.filter(func(c): return c != null)
+	if singers.is_empty():
+		return ""
+	var rate := 22050
+	var beat := 60.0 / _bpm()
+	var events := [] # [creature, start_seconds]
+	var t := 0.5
+	for c in singers:
+		events.append([c, t])
+		t += beat
+	for k in range(0, singers.size(), 2):
+		for c in singers.slice(k, k + 2):
+			events.append([c, t])
+		t += beat
+	for c in singers:
+		events.append([c, t])
+	var total := t + 2.5
+	var mix := PackedFloat32Array()
+	mix.resize(int(total * rate))
+	for e in events:
+		var c = e[0]
+		var src := _wav_to_floats(c.stream)
+		var step: float = SoundLab.pitch_scale_for(c.freq, _shift()) * float(c.stream.mix_rate) / rate
+		var start := int(float(e[1]) * rate)
+		var j := 0.0
+		var o := start
+		while int(j) < src.size() - 1 and o < mix.size():
+			var a := int(j)
+			mix[o] += lerpf(src[a], src[a + 1], j - a) * 0.6
+			j += step
+			o += 1
+	var bass := SoundLab.instrument(0, SoundLab.BASE_FREQ / 2.0 * pow(2.0, _shift() / 12.0))
+	var roots := [0.0, -3.0, 0.0, -5.0]
+	var bt := 0.5
+	var bar := 0
+	while bt < t + 1.0:
+		var ratio := pow(2.0, float(roots[bar % 4]) / 12.0)
+		var start := int(bt * rate)
+		var j := 0.0
+		var o := start
+		while int(j) < bass.size() - 1 and o < mix.size():
+			mix[o] += bass[int(j)] * 0.25
+			j += ratio
+			o += 1
+		bt += beat * 2.0
+		bar += 1
+	var peak := 0.0
+	for v in mix:
+		peak = maxf(peak, absf(v))
+	if peak > 0.95:
+		for i in mix.size():
+			mix[i] *= 0.95 / peak
+	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
+	var dir := OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
+	if dir.is_empty():
+		dir = OS.get_user_data_dir()
+	var path := dir.path_join("Klanggarten-Konzert-%s.wav" % stamp)
+	var err := SoundLab.make_wav(mix, rate).save_to_wav(path)
+	return path if err == OK else ""
+
+
+func _wav_to_floats(w: AudioStreamWAV) -> PackedFloat32Array:
+	var out := PackedFloat32Array()
+	out.resize(w.data.size() / 2)
+	for i in out.size():
+		out[i] = w.data.decode_s16(i * 2) / 32768.0
+	return out
+
+
+func _on_sang(who: Node2D) -> void:
+	for c in beds:
+		if c and c != who:
+			c.notice(who.global_position)
+
+
 func _set_weather(w: Weather) -> void:
 	weather = w
 	for c in beds:
@@ -254,9 +354,13 @@ func _go_to_sleep() -> void:
 		_rec_bed = -1
 	state = State.NIGHT
 	weather = Weather.NONE
+	var delay := 0.3
 	for c in beds:
 		if c:
 			c.sleeping = true
+			var pitch := randf_range(0.8, 1.4)
+			get_tree().create_timer(delay).timeout.connect(func(): Audio.play_ambient(_yawn, pitch, 6.0))
+			delay += 0.7
 
 
 func _wake_up() -> void:
@@ -274,9 +378,10 @@ func _process(delta: float) -> void:
 	_t += delta
 	if state != State.NIGHT:
 		day_time += delta
-		if day_time >= DAY_LENGTH and state == State.DAY:
+		if day_time >= day_length() and state == State.DAY:
 			_go_to_sleep()
 	_tick_music(delta)
+	_tick_ambience(delta)
 	for cf in _confetti:
 		cf[2] += delta
 		if cf[2] > 0.0:
@@ -296,6 +401,23 @@ func _process(delta: float) -> void:
 				_rain[i] = Vector2(randf() * 1400 - 60, -20)
 	queue_redraw()
 	_overlay.queue_redraw()
+
+
+func _tick_ambience(delta: float) -> void:
+	Audio.set_rain(weather == Weather.RAIN and state != State.RECORDING)
+	if state == State.RECORDING:
+		return
+	_amb_timer -= delta
+	if _amb_timer > 0.0:
+		return
+	if state == State.NIGHT:
+		Audio.play_ambient(_cricket, randf_range(0.9, 1.1), randf_range(-6.0, 0.0))
+		_amb_timer = randf_range(1.2, 3.0)
+	elif weather != Weather.RAIN and _evening() < 0.6:
+		Audio.play_ambient(_bird, randf_range(0.8, 1.3), randf_range(-8.0, -2.0))
+		_amb_timer = randf_range(4.0, 10.0)
+	else:
+		_amb_timer = 2.0
 
 
 ## Gentle accompaniment: bass on 1 and 3, music-box notes on the off-beats.
@@ -324,7 +446,7 @@ func _tick_music(delta: float) -> void:
 func _evening() -> float:
 	if state == State.NIGHT:
 		return 1.0
-	return clampf((day_time - DAY_LENGTH * 0.8) / (DAY_LENGTH * 0.2), 0.0, 1.0)
+	return clampf((day_time - day_length() * 0.8) / (day_length() * 0.2), 0.0, 1.0)
 
 
 func _draw() -> void:
@@ -565,6 +687,7 @@ func _open_parent_gate() -> void:
 	_panel.changed.connect(_on_settings_changed)
 	_panel.delete_recordings.connect(_delete_recordings)
 	_panel.clear_garden.connect(_clear_garden)
+	_panel.exporter = export_concert
 	_panel.tree_exited.connect(func(): _panel = null)
 	add_child(_panel)
 

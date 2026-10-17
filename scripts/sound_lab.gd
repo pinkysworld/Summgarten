@@ -239,3 +239,52 @@ static func instrument(kind: int, freq: float, rate: int = 22050) -> PackedFloat
 				v = sin(phase) * minf(1.0, t / 0.002) * exp(-t * 25.0) * 0.7
 		out[i] = v
 	return out
+
+
+## Ambience: 0 = bird chirp, 1 = cricket, 2 = rain (seamless loop), 3 = yawn.
+static func ambient(kind: int, rate: int = 22050, seed_value: int = 1) -> PackedFloat32Array:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var length: float = [0.5, 0.6, 2.0, 1.3][kind]
+	var n := int(rate * length)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phase := 0.0
+	var lp := 0.0
+	var lp2 := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var v := 0.0
+		match kind:
+			0:
+				# two quick rising chirps
+				var local := fmod(t, 0.22)
+				var f := 2600.0 + 1800.0 * local / 0.22
+				phase += TAU * f / rate
+				v = sin(phase) * sin(PI * clampf(local / 0.16, 0.0, 1.0)) * (1.0 if t < 0.44 else 0.0) * 0.4
+			1:
+				# cricket: pulsed high tone
+				phase += TAU * 4200.0 / rate
+				var pulse := 1.0 if fmod(t, 0.05) < 0.025 else 0.0
+				v = sin(phase) * pulse * sin(PI * t / length) * 0.18
+			2:
+				# soft rain: low-passed noise, crossfaded ends for looping
+				lp = lerpf(lp, rng.randf_range(-1.0, 1.0), 0.25)
+				lp2 = lerpf(lp2, lp, 0.5)
+				v = lp2 * 0.5
+				if rng.randf() < 0.0015:
+					v += 0.4
+			3:
+				# yawn: falling "aah" with two formants
+				var f := lerpf(330.0, 170.0, t / length)
+				phase += TAU * f / rate
+				var env := sin(PI * t / length)
+				v = (sin(phase) * 0.6 + sin(phase * 3.0) * 0.25 + sin(phase * 5.0) * 0.1) * env * env * 0.5
+		out[i] = v
+	if kind == 2:
+		var xf := int(rate * 0.2)
+		for i in xf:
+			var w := float(i) / xf
+			out[i] = out[i] * w + out[n - xf + i] * (1.0 - w)
+		out.resize(n - xf)
+	return out

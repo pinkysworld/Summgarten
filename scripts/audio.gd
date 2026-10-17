@@ -13,6 +13,9 @@ var _players: Array[AudioStreamPlayer] = []
 var _next := 0
 var _music: Array[AudioStreamPlayer] = []
 var _next_music := 0
+var _ambient: Array[AudioStreamPlayer] = []
+var _next_amb := 0
+var _rain: AudioStreamPlayer
 var _buffer := PackedFloat32Array()
 
 
@@ -47,6 +50,24 @@ func _ready() -> void:
 		mp.bus = "Music"
 		add_child(mp)
 		_music.append(mp)
+
+	var amb := AudioServer.bus_count
+	AudioServer.add_bus(amb)
+	AudioServer.set_bus_name(amb, "Ambient")
+	AudioServer.set_bus_send(amb, "Master")
+	AudioServer.set_bus_volume_db(amb, -14.0)
+	for i in 3:
+		var ap := AudioStreamPlayer.new()
+		ap.bus = "Ambient"
+		add_child(ap)
+		_ambient.append(ap)
+	_rain = AudioStreamPlayer.new()
+	_rain.bus = "Ambient"
+	var rain_wav := SoundLab.make_wav(SoundLab.ambient(2), 22050)
+	rain_wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	rain_wav.loop_end = rain_wav.data.size() / 2
+	_rain.stream = rain_wav
+	add_child(_rain)
 
 	_mic_player = AudioStreamPlayer.new()
 	_mic_player.stream = AudioStreamMicrophone.new()
@@ -118,3 +139,19 @@ func play_music(stream: AudioStream, shift: float, volume_db := 0.0) -> void:
 	p.volume_db = volume_db
 	p.pitch_scale = pow(2.0, shift / 12.0)
 	p.play()
+
+
+func play_ambient(stream: AudioStream, pitch := 1.0, volume_db := 0.0) -> void:
+	var p := _ambient[_next_amb]
+	_next_amb = (_next_amb + 1) % _ambient.size()
+	p.stream = stream
+	p.pitch_scale = pitch
+	p.volume_db = volume_db
+	p.play()
+
+
+func set_rain(on: bool) -> void:
+	if on and not _rain.playing:
+		_rain.play()
+	elif not on:
+		_rain.stop()

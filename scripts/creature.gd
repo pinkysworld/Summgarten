@@ -16,7 +16,15 @@ var loud := 1
 var stream: AudioStream
 var freq := 261.63
 
+signal sang(who: Node2D)
+
 var grow := 0.0
+var _look := Vector2.ZERO ## where the eyes point, -1..1
+var _look_target := Vector2.ZERO
+var _look_hold := 0.0
+var _blink := 0.0
+var _next_blink := randf_range(1.5, 4.5)
+var _bob := 0.0
 var bow_amt := 0.0
 var hop := 0.0
 var sing_amp := 0.0
@@ -45,6 +53,7 @@ func grow_in(duration := 1.4) -> void:
 
 func sing(shift: float) -> void:
 	Audio.play(stream, freq, shift)
+	sang.emit(self)
 	var tw := create_tween()
 	tw.tween_property(self, "sing_amp", 1.0, 0.08)
 	tw.tween_property(self, "sing_amp", 0.0, 0.6).set_trans(Tween.TRANS_SINE)
@@ -67,6 +76,17 @@ func celebrate_hop(delay: float) -> void:
 	tw.tween_property(self, "hop", 0.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
 
+## A neighbour sang: look at it and bob along a little.
+func notice(from: Vector2) -> void:
+	if sleeping:
+		return
+	_look_target = (from - global_position).normalized()
+	_look_hold = 1.6
+	var tw := create_tween()
+	tw.tween_property(self, "_bob", 1.0, 0.12)
+	tw.tween_property(self, "_bob", 0.0, 0.3)
+
+
 func radius() -> float:
 	return 80.0 * SIZES[loud]
 
@@ -74,6 +94,18 @@ func radius() -> float:
 func _process(delta: float) -> void:
 	_t += delta
 	_sleep_blend = move_toward(_sleep_blend, 1.0 if sleeping else 0.0, delta * 0.7)
+	_look_hold -= delta
+	if _look_hold <= 0.0:
+		_look_target = Vector2.ZERO
+		if randf() < delta * 0.3:
+			_look_target = Vector2(randf_range(-1, 1), randf_range(-0.5, 0.5))
+			_look_hold = randf_range(0.8, 2.0)
+	_look = _look.lerp(_look_target, minf(1.0, delta * 8.0))
+	_next_blink -= delta
+	if _next_blink <= 0.0:
+		_blink = 1.0
+		_next_blink = randf_range(2.0, 5.0)
+	_blink = maxf(0.0, _blink - delta * 7.0)
 	for n in _notes:
 		n[2] += delta
 		if n[2] > 0.0:
@@ -100,8 +132,8 @@ func _draw() -> void:
 	draw_colored_polygon(sh, Color(0, 0, 0, 0.18))
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.05 * (1.0 - _sleep_blend * 0.7)
 	var squash := 1.0 + 0.18 * sing_amp
-	var lean := sway + bow_amt * 0.45
-	draw_set_transform(Vector2(0, -hop * 40.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
+	var lean := sway + bow_amt * 0.45 + _look.x * 0.06
+	draw_set_transform(Vector2(0, -hop * 40.0 - _bob * 8.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	var col: Color = COLORS[pitch][loud]
 	col = col.lerp(Color("4a4f7a"), _sleep_blend * 0.45)
 	match pitch:
@@ -213,11 +245,12 @@ func _draw_face(c: Vector2, k: float) -> void:
 	var eye_dx := 14.0 * k
 	for side in [-1, 1]:
 		var e := c + Vector2(side * eye_dx, -6 * k)
-		if _sleep_blend > 0.5:
+		if _sleep_blend > 0.5 or _blink > 0.3:
 			draw_arc(e, 6 * k, 0.2, PI - 0.2, 8, ink, 3.0)
 		else:
 			draw_circle(e, 8 * k, Color.WHITE)
-			draw_circle(e + Vector2(0, 1), 4.5 * k, ink)
+			draw_circle(e + Vector2(0, 1) + _look * 3.0 * k, 4.5 * k, ink)
+			draw_circle(e + Vector2(-1.5, -1.5) * k + _look * 3.0 * k, 1.6 * k, Color.WHITE)
 	draw_circle(c + Vector2(-22 * k, 6 * k), 5 * k, Color(1, 0.5, 0.6, 0.5))
 	draw_circle(c + Vector2(22 * k, 6 * k), 5 * k, Color(1, 0.5, 0.6, 0.5))
 	var m := c + Vector2(0, 10 * k)

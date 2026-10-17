@@ -27,9 +27,16 @@ func _ready() -> void:
 	main._open_parent_gate()
 	await get_tree().create_timer(0.3).timeout
 	await _shot(out + "/parent_gate.png")
+	var wav_path: String = main.export_concert()
+	print("EXPORT ", wav_path, " ", FileAccess.get_file_as_bytes(wav_path).size() if wav_path else 0)
+	if wav_path:
+		DirAccess.remove_absolute(wav_path)
+	main._panel._show_settings()
+	await get_tree().create_timer(0.3).timeout
+	await _shot(out + "/parents.png")
 	main._panel.queue_free()
 	main.state = main.State.DAY
-	main.day_time = main.DAY_LENGTH
+	main.day_time = main.day_length()
 	await get_tree().create_timer(3.0).timeout
 	await _shot(out + "/night.png")
 	main._plant(3)
