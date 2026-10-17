@@ -40,6 +40,8 @@ var bow_amt := 0.0
 var hop := 0.0
 var sing_amp := 0.0
 var sleeping := false
+var light := Color.WHITE ## colour of the light (dusk / moon), set by the garden
+var shadow_dir := 0.0 ## -1..1 shadow leans away from the sun
 var raining := false ## the frog loves rain, everyone else looks up
 var crouch := 0.0 ## anticipation: squashes down before a hop or a song
 var _hat_swing := 0.0 ## follow-through: hats and leaves lag behind and wobble
@@ -229,7 +231,7 @@ func _process(delta: float) -> void:
 	_hat_swing = clampf(_hat_swing + _hat_vel * delta * 0.06, -0.45, 0.45)
 	_thirst_shown = move_toward(_thirst_shown, thirst, delta * 0.8)
 	var dry := clampf((_thirst_shown - 0.4) / 0.6, 0.0, 1.0)
-	modulate = Color.WHITE.lerp(Color(0.8, 0.76, 0.64), dry * 0.8)
+	modulate = Color.WHITE.lerp(Color(0.8, 0.76, 0.64), dry * 0.8) * light
 	for d in _drops:
 		d[2] += delta
 		d[0] += d[1] * delta
@@ -333,7 +335,8 @@ func _draw() -> void:
 			draw_circle(mid, (HEIGHTS[species] * 0.55 + k * 14) * s, Color(1, 0.95, 0.55, 0.22 * halo))
 		draw_arc(mid, (HEIGHTS[species] * 0.55 + 36) * s, 0, TAU, 48, Color(1, 1, 1, 0.8 * halo), 5.0, true)
 	# soft ground shadow
-	draw_colored_polygon(_ell_pts(Vector2(0, 4), Vector2(62 * s, 14 * s), 0.0, 24), Color(0.1, 0.05, 0.1, 0.22))
+	var sl := absf(shadow_dir)
+	draw_colored_polygon(_ell_pts(Vector2(shadow_dir * 34 * s, 4), Vector2((62 + sl * 40) * s, 14 * s), 0.0, 24), Color(0.1, 0.05, 0.1, 0.22 - sl * 0.05))
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.045 * (1.0 - _sleep_blend * 0.7)
 	var breath := 0.018 * sin(_t * 2.2) * (1.0 - _sleep_blend * 0.3) * (0.6 if not sleeping else 1.4)
 	var squash := 1.0 + 0.16 * sing_amp + 0.06 * beat_pulse + breath - 0.2 * crouch

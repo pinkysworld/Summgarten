@@ -91,6 +91,10 @@ var _can_pos := CAN_HOME
 var _pour := 0.0 ## seconds left of the pouring animation
 var _pour_drops: Array = [] ## [pos, vel, age]
 var _water_save := 0.0
+var _ev_smooth := 0.0
+var _song_rings: Array = [] ## [age, colour] pond rings, one per sung note
+var _beat_kick := 0.0 ## flowers and grass nod on the beat
+var _season_fade := 0.0 ## paper wash when the season changes
 const HELP_STEP := 4.0 ## seconds per bubble in the help tour
 var _help_all := 0.0 ## seconds left in the help tour (one bubble at a time)
 var _help_one := {} ## help key -> seconds left (a single bubble)
@@ -714,6 +718,8 @@ func _wav_to_floats(w: AudioStreamWAV) -> PackedFloat32Array:
 
 
 func _on_sang(who: Node2D) -> void:
+	if season != Season.WINTER:
+		_song_rings.append([0.0, Creature.PALETTE[who.species]])
 	for c in beds:
 		if c and c != who:
 			c.notice(who.global_position)
@@ -800,6 +806,13 @@ func _process(delta: float) -> void:
 			cf[1] *= 0.985
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
 	_tick_water(delta)
+	_beat_kick = maxf(0.0, _beat_kick - delta * 4.0)
+	for r in _song_rings:
+		r[0] += delta
+	_song_rings = _song_rings.filter(func(r): return r[0] < 2.2)
+	_ev_smooth = move_toward(_ev_smooth, _evening_raw(), delta * 0.6)
+	_season_fade = maxf(0.0, _season_fade - delta * 0.8)
+	_tick_light()
 	_help_all = maxf(0.0, _help_all - delta)
 	for k in _help_one.keys():
 		_help_one[k] -= delta
@@ -1075,6 +1088,7 @@ func _tick_music(delta: float) -> void:
 	var root: float = roots[bar] + _shift()
 	var fade := 1.0 - _evening()
 	if half % 2 == 0:
+		_beat_kick = 1.0
 		for c in beds:
 			if c:
 				c.pulse()
@@ -1085,7 +1099,12 @@ func _tick_music(delta: float) -> void:
 		Audio.play_music(_pluck, steps[randi() % steps.size()] + _shift() - 12.0, linear_to_db(0.5 * fade + 0.01))
 
 
+## Smoothed evening amount 0 day .. 1 night (waking up fades, never jumps).
 func _evening() -> float:
+	return _ev_smooth
+
+
+func _evening_raw() -> float:
 	if state == State.NIGHT:
 		return 1.0
 	return clampf((day_time - day_length() * 0.8) / (day_length() * 0.2), 0.0, 1.0)
@@ -1194,7 +1213,7 @@ func _draw() -> void:
 		var gp := Vector2(fmod(i * 157.0, 1320.0) - 20, 400 + fmod(i * 89.0, 320.0))
 		if _in_rest_zone(gp):
 			continue
-		var sway := sin(_t * 1.3 + i) * 3.0
+		var sway := sin(_t * 1.3 + i) * 3.0 + _beat_kick * 2.0
 		for k in 3:
 			draw_line(gp + Vector2((k - 1) * 4, 0), gp + Vector2((k - 1) * 7 + sway, -12 - k * 3), tuft, 2.5)
 		if i % 6 == 0 and season != Season.WINTER:
@@ -1472,7 +1491,22 @@ func _in_rest_zone(p: Vector2) -> bool:
 	return (p - CAN_HOME).length() < 95.0
 
 
+## Light on the beings: warm at dusk, cool moonlight at night, and the
+## shadow direction follows the sky sun (it falls away from it, longer at dusk).
+func _tick_light() -> void:
+	var ev := _evening()
+	var night := clampf(ev * 2.0 - 1.0, 0.0, 1.0)
+	var dusk := clampf(ev * 2.0, 0.0, 1.0) * (1.0 - night)
+	var tint := Color.WHITE.lerp(Color(1.0, 0.86, 0.74), dusk * 0.7).lerp(Color(0.6, 0.66, 0.92), night * 0.75)
+	for c in beds:
+		if c:
+			c.light = tint
+			c.shadow_dir = clampf((c.global_position.x - 560.0) / 700.0, -1.0, 1.0) * (0.35 + ev * 1.2) * (1.0 - night)
+
+
 func set_season(s_: int) -> void:
+	if s_ != season and is_inside_tree() and not screenshot_mode:
+		_season_fade = 1.0
 	season = s_
 	_season_parts.clear()
 	if season != Season.SUMMER:
@@ -1526,7 +1560,7 @@ func _draw_flower_cluster(at: Vector2, seed_i: int, night: float) -> void:
 	for j in 5:
 		var h := 22.0 + fmod(seed_i * 7.0 + j * 5.3, 14.0)
 		var base := at + Vector2(-20 + j * 10, (j % 2) * 3)
-		var sway := sin(_t * 1.8 + seed_i + j * 0.7) * 4.0
+		var sway := sin(_t * 1.8 + seed_i + j * 0.7) * 4.0 + _beat_kick * 3.0 * (1.0 if j % 2 == 0 else -1.0)
 		var top := base + Vector2(sway, -h)
 		draw_line(base, top, stem, 2.5)
 		_draw_ellipse(base + Vector2(sway * 0.4 - 4, -h * 0.45), Vector2(5, 2.5), stem.lightened(0.2))
@@ -1620,6 +1654,12 @@ func _draw_pond(c: Vector2, sky: Color, night: float) -> void:
 			var a := TAU * i / 5.0
 			draw_circle(c + Vector2(-40, -1) + Vector2(cos(a) * 5, sin(a) * 2.5), 4.0, Color("ffc1da").lerp(Color("3b3f7a"), night * 0.6))
 		draw_circle(c + Vector2(-40, -2), 2.5, Color("ffd84d"))
+	# every sung note sends a coloured ring across the pond
+	for r in _song_rings:
+		var u: float = r[0] / 2.2
+		var ring := _ellipse_pts(c + Vector2(10, 0), Vector2(10 + u * 70, (10 + u * 70) * 0.26), 40)
+		ring.append(ring[0])
+		draw_polyline(ring, Color(Color(r[1]).lightened(0.3), 0.8 * (1.0 - u)), 3.0, true)
 	# ripples: rain drops or a gentle periodic ring
 	var rings := 3 if weather == Weather.RAIN else 1
 	for i in rings:
@@ -1661,6 +1701,8 @@ func _draw_can(ci: CanvasItem, at: Vector2, night: float, rot := 0.0, glow := 0.
 
 
 func _draw_overlay() -> void:
+	if _season_fade > 0.0:
+		_overlay.draw_rect(Rect2(-100, -100, 1480, 920), Color(0.99, 0.97, 0.92, 0.85 * _season_fade * _season_fade))
 	_draw_help()
 	for dr in _pour_drops:
 		if dr[2] > 0.0:
@@ -1872,7 +1914,7 @@ func _draw_birds(night: float) -> void:
 func _draw_balloon(night: float, vivid: float) -> void:
 	# one sky event at a time: balloon first, birds later in the 120 s cycle
 	var cyc := fmod(_t + 20.0, 120.0)
-	if cyc > 60.0:
+	if cyc > 60.0 or night > 0.2 or weather == Weather.RAIN:
 		return
 	var x := lerpf(-60.0, 1340.0, cyc / 60.0)
 	var c := Vector2(x, 120.0 + sin(_t * 0.4) * 10.0)
