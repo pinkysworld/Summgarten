@@ -32,6 +32,13 @@ var _t := 0.0
 var _rain: Array[Vector2] = []
 var _panel: CanvasLayer
 var _next_preset := 0
+var _beat_time := 0.0
+var _beat := 0
+var _bass: AudioStreamWAV
+var _pluck: AudioStreamWAV
+var _plop: AudioStreamWAV
+var _presses := {} ## button centre -> time pressed
+var _confetti: Array = [] ## [pos, vel, age, color, spin]
 var _overlay := Node2D.new()
 
 
@@ -41,6 +48,9 @@ func _ready() -> void:
 	bed_data.resize(BED_POSITIONS.size())
 	for i in 80:
 		_rain.append(Vector2(randf() * 1400 - 60, randf() * 760))
+	_bass = SoundLab.make_wav(SoundLab.instrument(0, SoundLab.BASE_FREQ / 2.0), 22050)
+	_pluck = SoundLab.make_wav(SoundLab.instrument(1, SoundLab.BASE_FREQ * 2.0), 22050)
+	_plop = SoundLab.make_wav(SoundLab.instrument(2, 520.0), 22050)
 	_overlay.z_index = 10
 	_overlay.draw.connect(_draw_overlay)
 	add_child(_overlay)
@@ -55,6 +65,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
 		return
 	var p := get_global_mouse_position()
+	for btn in [BTN_CONDUCTOR, BTN_SUN, BTN_RAIN]:
+		if p.distance_to(btn) < BTN_R:
+			_presses[btn] = _t
+	Audio.play_music(_plop, randf_range(-2.0, 2.0) + _shift(), 2.0)
 	if p.distance_to(BTN_PARENT) < 30:
 		_open_parent_gate()
 		return
@@ -169,14 +183,43 @@ func _greet() -> void:
 func _concert() -> void:
 	state = State.CONCERT
 	var beat := 60.0 / _bpm()
-	for _r in 2:
-		for c in beds:
-			if c and is_instance_valid(c):
+	var singers := beds.filter(func(c): return c != null)
+	# Round 1: one after another, like a melody.
+	for c in singers:
+		if is_instance_valid(c):
+			c.sing(_shift())
+		await get_tree().create_timer(beat).timeout
+	# Round 2: in pairs, like little chords.
+	for k in range(0, singers.size(), 2):
+		for c in singers.slice(k, k + 2):
+			if is_instance_valid(c):
 				c.sing(_shift())
-				await get_tree().create_timer(beat).timeout
-	await get_tree().create_timer(beat).timeout
+		await get_tree().create_timer(beat).timeout
+	# Finale: everyone together, then a bow and fireworks.
+	for c in singers:
+		if is_instance_valid(c):
+			c.sing(_shift())
+	_fireworks()
+	await get_tree().create_timer(beat * 1.5).timeout
+	for i in singers.size():
+		if is_instance_valid(singers[i]):
+			singers[i].bow()
+	await get_tree().create_timer(1.3).timeout
+	for i in singers.size():
+		if is_instance_valid(singers[i]):
+			singers[i].celebrate_hop(i * 0.08)
+	await get_tree().create_timer(0.8).timeout
 	if state == State.CONCERT:
 		state = State.DAY
+
+
+func _fireworks() -> void:
+	var cols := [Color("ff7fa8"), Color("ffd84d"), Color("7fd6c2"), Color("9fd0ff"), Color("c98bd9")]
+	for burst in 4:
+		var origin := Vector2(240 + burst * 270, 200 + (burst % 2) * 60)
+		for i in 22:
+			var a := TAU * i / 22.0
+			_confetti.append([origin, Vector2(cos(a), sin(a)) * randf_range(140, 260), -burst * 0.25, cols[(i + burst) % cols.size()], randf() * TAU])
 
 
 func _set_weather(w: Weather) -> void:
@@ -233,6 +276,14 @@ func _process(delta: float) -> void:
 		day_time += delta
 		if day_time >= DAY_LENGTH and state == State.DAY:
 			_go_to_sleep()
+	_tick_music(delta)
+	for cf in _confetti:
+		cf[2] += delta
+		if cf[2] > 0.0:
+			cf[0] += cf[1] * delta
+			cf[1].y += 160.0 * delta
+			cf[1] *= 0.985
+	_confetti = _confetti.filter(func(cf): return cf[2] < 2.2)
 	if state == State.RECORDING:
 		_rec_time += delta
 		if _rec_time >= Audio.RECORD_SECONDS:
@@ -245,6 +296,29 @@ func _process(delta: float) -> void:
 				_rain[i] = Vector2(randf() * 1400 - 60, -20)
 	queue_redraw()
 	_overlay.queue_redraw()
+
+
+## Gentle accompaniment: bass on 1 and 3, music-box notes on the off-beats.
+## Quiet while recording so the child can hear itself; silent at night.
+func _tick_music(delta: float) -> void:
+	if state == State.NIGHT or state == State.RECORDING or _creature_count() == 0:
+		return
+	_beat_time += delta
+	var beat := 60.0 / _bpm()
+	if _beat_time < beat / 2.0:
+		return
+	_beat_time -= beat / 2.0
+	_beat += 1
+	var half := _beat % 16 # 8 beats = 2 bars, in half beats
+	var bar := (_beat / 8) % 4
+	var roots := [0.0, -3.0, 0.0, -5.0] # C, A, C, G
+	var root: float = roots[bar] + _shift()
+	var fade := 1.0 - _evening()
+	if half % 4 == 0:
+		Audio.play_music(_bass, root, linear_to_db(0.9 * fade + 0.01))
+	elif half % 2 == 1 and randf() < 0.55:
+		var steps := [0.0, 2.0, 4.0, 7.0, 9.0, 12.0]
+		Audio.play_music(_pluck, steps[randi() % steps.size()] + _shift() - 12.0, linear_to_db(0.5 * fade + 0.01))
 
 
 func _evening() -> float:
@@ -333,7 +407,13 @@ func _draw() -> void:
 			for k in 3:
 				draw_circle(b + Vector2(0, -6), 18 + k * 9 + glow * 6, Color(1, 0.95, 0.6, (0.22 - k * 0.06) * (0.6 + glow * 0.4)))
 			var bounce := absf(sin(_t * 2.0 + i)) * 4.0
-			_draw_ellipse(b + Vector2(0, -6 - bounce), Vector2(14, 18), Color("e0a83e"))
+			var grow := 1.0
+			if i == _rec_bed:
+				var lvl := Audio.level
+				grow = 1.0 + lvl * 0.9
+				bounce = absf(sin(_t * 18.0)) * 10.0 * lvl + 3.0
+				b += Vector2(sin(_t * 31.0) * 5.0 * lvl, 0)
+			_draw_ellipse(b + Vector2(0, -6 - bounce), Vector2(14, 18) * grow, Color("e0a83e"))
 			_draw_ellipse(b + Vector2(-4, -12 - bounce), Vector2(4, 6), Color(1, 1, 1, 0.5))
 			draw_line(b + Vector2(0, -22 - bounce), b + Vector2(6, -34 - bounce), Color("5aa64b"), 4.0)
 			_draw_ellipse(b + Vector2(11, -36 - bounce), Vector2(8, 4), Color("6cc15a"))
@@ -378,6 +458,11 @@ func _draw() -> void:
 
 
 func _draw_overlay() -> void:
+	for cf in _confetti:
+		if cf[2] > 0.0:
+			var al: float = clampf(2.2 - float(cf[2]), 0.0, 1.0)
+			var d := Vector2.from_angle(float(cf[4]) + float(cf[2]) * 6.0) * 7.0
+			_overlay.draw_line(cf[0] - d, cf[0] + d, Color(cf[3], al), 5.0)
 	# Recording overlay
 	if state == State.RECORDING and _rec_bed >= 0:
 		var c: Vector2 = BED_POSITIONS[_rec_bed] + Vector2(0, -120)
@@ -397,11 +482,15 @@ func _draw_overlay() -> void:
 
 func _draw_button(c: Vector2, enabled: bool, active: bool) -> void:
 	var a := 1.0 if enabled else 0.35
+	var since: float = _t - float(_presses.get(c, -10.0))
+	if since < 0.5:
+		draw_circle(c, BTN_R + since * 70.0, Color(1, 1, 1, 0.5 * (1.0 - since * 2.0)))
 	var bob := sin(_t * 2.0 + c.x) * 3.0 if enabled else 0.0
 	if active:
 		draw_circle(c, BTN_R + 10 + sin(_t * 4.0) * 4, Color(1, 0.95, 0.5, 0.45))
 	draw_circle(c + Vector2(0, 6), BTN_R, Color(0, 0, 0, 0.15 * a))
-	draw_circle(c + Vector2(0, bob * 0.3), BTN_R, Color(1, 1, 1, 0.9 * a))
+	var press := 1.0 - 0.12 * maxf(0.0, 1.0 - since * 5.0)
+	draw_circle(c + Vector2(0, bob * 0.3), BTN_R * press, Color(1, 1, 1, 0.9 * a))
 
 
 func _draw_baton(c: Vector2, enabled: bool) -> void:

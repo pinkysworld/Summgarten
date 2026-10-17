@@ -18,6 +18,12 @@ func _ready() -> void:
 	main._concert()
 	await get_tree().create_timer(0.8).timeout
 	await _shot(out + "/rain_concert.png")
+	while main.state == main.State.CONCERT and main._confetti.is_empty():
+		await get_tree().process_frame
+	await get_tree().create_timer(0.5).timeout
+	await _shot(out + "/fireworks.png")
+	while main.state == main.State.CONCERT:
+		await get_tree().process_frame
 	main._open_parent_gate()
 	await get_tree().create_timer(0.3).timeout
 	await _shot(out + "/parent_gate.png")

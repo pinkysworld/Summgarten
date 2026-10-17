@@ -17,6 +17,8 @@ var stream: AudioStream
 var freq := 261.63
 
 var grow := 0.0
+var bow_amt := 0.0
+var hop := 0.0
 var sing_amp := 0.0
 var sleeping := false
 var _t := randf() * 10.0
@@ -49,6 +51,20 @@ func sing(shift: float) -> void:
 	var top: float = -170.0 * SIZES[loud]
 	for i in 2:
 		_notes.append([Vector2(randf_range(-20, 20), top), Vector2(randf_range(-30, 30), -70), -i * 0.15, COLORS[pitch][loud].lightened(0.2)])
+
+
+func bow() -> void:
+	var tw := create_tween()
+	tw.tween_property(self, "bow_amt", 1.0, 0.35).set_trans(Tween.TRANS_SINE)
+	tw.tween_interval(0.4)
+	tw.tween_property(self, "bow_amt", 0.0, 0.45).set_trans(Tween.TRANS_BACK)
+
+
+func celebrate_hop(delay: float) -> void:
+	var tw := create_tween()
+	tw.tween_interval(delay)
+	tw.tween_property(self, "hop", 1.0, 0.18).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(self, "hop", 0.0, 0.25).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
 
 func radius() -> float:
@@ -84,7 +100,8 @@ func _draw() -> void:
 	draw_colored_polygon(sh, Color(0, 0, 0, 0.18))
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.05 * (1.0 - _sleep_blend * 0.7)
 	var squash := 1.0 + 0.18 * sing_amp
-	draw_set_transform(Vector2.ZERO, sway, Vector2(s / sqrt(squash), s * squash))
+	var lean := sway + bow_amt * 0.45
+	draw_set_transform(Vector2(0, -hop * 40.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	var col: Color = COLORS[pitch][loud]
 	col = col.lerp(Color("4a4f7a"), _sleep_blend * 0.45)
 	match pitch:

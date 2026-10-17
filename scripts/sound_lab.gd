@@ -214,3 +214,28 @@ static func preset(index: int, rate: int = 22050) -> Dictionary:
 		"pitch": pitch_class(freq),
 		"loud": index % 3,
 	}
+
+
+## Soft accompaniment voices: 0 = warm bass, 1 = music-box pluck, 2 = tap "plop".
+static func instrument(kind: int, freq: float, rate: int = 22050) -> PackedFloat32Array:
+	var length: float = [1.2, 0.9, 0.18][kind]
+	var n := int(rate * length)
+	var out := PackedFloat32Array()
+	out.resize(n)
+	var phase := 0.0
+	for i in n:
+		var t := float(i) / rate
+		var v := 0.0
+		match kind:
+			0:
+				phase += TAU * freq / rate
+				v = (sin(phase) + 0.25 * sin(phase * 2.0)) * minf(1.0, t / 0.03) * exp(-t * 2.2) * 0.8
+			1:
+				phase += TAU * freq / rate
+				v = (sin(phase) + 0.3 * sin(phase * 3.0) * exp(-t * 6.0)) * minf(1.0, t / 0.004) * exp(-t * 4.5) * 0.5
+			2:
+				var f := freq * (1.0 + 1.5 * exp(-t * 30.0))
+				phase += TAU * f / rate
+				v = sin(phase) * minf(1.0, t / 0.002) * exp(-t * 25.0) * 0.7
+		out[i] = v
+	return out

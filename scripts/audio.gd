@@ -11,6 +11,8 @@ var _capture: AudioEffectCapture
 var _mic_player: AudioStreamPlayer
 var _players: Array[AudioStreamPlayer] = []
 var _next := 0
+var _music: Array[AudioStreamPlayer] = []
+var _next_music := 0
 var _buffer := PackedFloat32Array()
 
 
@@ -34,6 +36,17 @@ func _ready() -> void:
 	reverb.dry = 0.9
 	AudioServer.add_bus_effect(garden, reverb)
 	AudioServer.add_bus_effect(garden, AudioEffectHardLimiter.new())
+
+	var music := AudioServer.bus_count
+	AudioServer.add_bus(music)
+	AudioServer.set_bus_name(music, "Music")
+	AudioServer.set_bus_send(music, "Garden")
+	AudioServer.set_bus_volume_db(music, -11.0)
+	for i in 6:
+		var mp := AudioStreamPlayer.new()
+		mp.bus = "Music"
+		add_child(mp)
+		_music.append(mp)
 
 	_mic_player = AudioStreamPlayer.new()
 	_mic_player.stream = AudioStreamMicrophone.new()
@@ -94,4 +107,14 @@ func play(stream: AudioStream, freq: float, shift: float) -> void:
 	_next = (_next + 1) % _players.size()
 	p.stream = stream
 	p.pitch_scale = SoundLab.pitch_scale_for(freq, shift)
+	p.play()
+
+
+## Accompaniment / UI sounds: already in tune, only transposed by `shift`.
+func play_music(stream: AudioStream, shift: float, volume_db := 0.0) -> void:
+	var p := _music[_next_music]
+	_next_music = (_next_music + 1) % _music.size()
+	p.stream = stream
+	p.volume_db = volume_db
+	p.pitch_scale = pow(2.0, shift / 12.0)
 	p.play()

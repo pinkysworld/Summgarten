@@ -1,11 +1,13 @@
-# Klanggarten 1.1.0
+# Klanggarten 1.2.0
 
 Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen und Wesen wachsen, die den Klang pentatonisch korrigiert im Takt vorsingen. Konzept: [Klanggarten – Spielkonzept.md](Klanggarten%20–%20Spielkonzept.md).
 
 ## Umfang v1
 - 1 Garten mit 8 Beeten, Samen antippen → 2,5 s Aufnahme → Wesen wächst
 - 9 Wesen: Tonhöhe bestimmt die Form (tief = Pilz, mittel = Krabbler, hoch = Blume), Lautstärke Größe und Farbe; Wachs-, Sing- und Schlafanimation
-- Konzert (Dirigentenstab ab 3 Wesen), 90 BPM, pentatonische Korrektur, Hall
+- Leise Begleitmusik im Takt (Bass + Spieluhr), pausiert während der Aufnahme und nachts
+- Konzert (Dirigentenstab ab 3 Wesen): Melodie, dann Zweiklänge, Finale mit allen, Feuerwerk und Verbeugung; 90 BPM, pentatonische Korrektur, Hall
+- Sofortige Rückmeldung: Tipp-Geräusch, Knöpfe federn, der Samen zappelt mit der Stimme
 - Wetter: Sonne = höher/schneller (116 BPM), Regen = tiefer/langsamer (68 BPM)
 - 12 eingebaute Klänge, wenn kein Mikrofon da/erlaubt ist oder nur Stille kam – kein Scheitern
 - Nach 6 Minuten wird es Abend, alle schlafen ein; die Sonne weckt den Garten
