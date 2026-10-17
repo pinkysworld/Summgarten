@@ -48,6 +48,7 @@ var _hat_swing := 0.0 ## follow-through: hats and leaves lag behind and wobble
 var _hat_vel := 0.0
 var _prev_motion := 0.0
 var _idle_in := randf_range(4.0, 9.0)
+var _head := Vector2.ZERO ## top of the head in local space (after lean), for the thirst bubble
 var thirst := 0.0 ## 0 fresh .. 1 very thirsty: droops and fades until watered
 var _thirst_shown := 0.0
 var _drops: Array = [] ## [pos, vel, age] water splash
@@ -346,6 +347,7 @@ func _draw() -> void:
 	if species == Species.SUNFLOWER and not sleeping:
 		sun_lean = clampf((560.0 - global_position.x) / 1600.0, -0.14, 0.14) # follows the sun
 	var lean := sun_lean + sway * (1.0 - droop * 0.6) + bow_amt * 0.45 + _look.x * 0.05 + droop * 0.22
+	_head = Vector2(0, -hop * 40.0 - _bob * 8.0) + Vector2(0, -HEIGHTS[species] * s * squash).rotated(lean)
 	draw_set_transform(Vector2(0, -hop * 40.0 - _bob * 8.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	match species:
 		Species.MUSHROOM: _draw_mushroom()
@@ -753,20 +755,24 @@ func _draw_zzz() -> void:
 		draw_string(font, pos, "z", HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1, 1, 1, 1.0 - ph))
 
 
-## A big pulsing bubble with a water drop right above the head: "I'm thirsty".
+## A big pulsing bubble with a water drop, pinned to the head with a
+## speech-bubble tail so it is clear who is thirsty.
 func _draw_thirst_bubble(k: float) -> void:
 	var a := clampf(k * 1.6, 0.0, 1.0)
-	var top: float = -HEIGHTS[species] - (40.0 if season != 1 else 22.0)
-	var pulse := 1.0 + 0.12 * (0.5 + 0.5 * sin(_t * 4.0))
-	var c := Vector2(10, top - 36 + sin(_t * 2.0) * 4.0)
-	var inv := Vector2(1.0 / maxf(scale.x, 0.01), 1.0 / maxf(scale.y, 0.01)) # keep the size readable on small beings
-	var r := 36.0 * pulse * inv.x
-	draw_circle(c + Vector2(-14, 36) * inv, 6 * inv.x, Color(1, 1, 1, 0.95 * a))
-	draw_circle(c + Vector2(-6, 24) * inv, 9 * inv.x, Color(1, 1, 1, 0.95 * a))
+	var inv := Vector2(1.0 / maxf(scale.x, 0.01), 1.0 / maxf(scale.y, 0.01)) # same on-screen size for every being
+	var pulse := 1.0 + 0.1 * (0.5 + 0.5 * sin(_t * 4.0))
+	var r := 30.0 * pulse * inv.x
+	var head := _head + Vector2(0, -(18.0 if season != 1 else 4.0))
+	var c := head + Vector2(30, -50) * inv + Vector2(0, sin(_t * 2.0) * 3.0)
+	var tip := head + Vector2(4, -4) * inv
+	var side := (tip - c).normalized().orthogonal() * 11.0 * inv.x
+	var edge := c + (tip - c).normalized() * (r - 4 * inv.x)
+	draw_colored_polygon(PackedVector2Array([edge + side * 1.2, tip, edge - side * 1.2]), Color(INK, 0.6 * a))
 	draw_circle(c, r + 4 * inv.x, Color(INK, 0.6 * a))
+	draw_colored_polygon(PackedVector2Array([edge + side, tip.lerp(edge, 0.15), edge - side]), Color(1, 1, 1, a))
 	draw_circle(c, r, Color(1, 1, 1, a))
 	draw_circle(c, r - 5 * inv.x, Color(Color("d8eeff"), a))
-	_drop(c + Vector2(0, 6) * inv, 15.0 * pulse * inv.x, Color(Color("3d8fe0"), a))
+	_drop(c + Vector2(0, 6) * inv, 13.0 * pulse * inv.x, Color(Color("3d8fe0"), a))
 
 
 func _drop(c: Vector2, r: float, col: Color) -> void:
