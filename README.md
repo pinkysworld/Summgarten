@@ -18,11 +18,18 @@ Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen un
 - Elternbereich (kleiner Kreis oben rechts) hinter Rechenaufgabe: Mikrofon an/aus, Lautstärke, Tageslänge (4/6/10 min), Konzert als WAV in „Dokumente“ speichern, Aufnahmen löschen, Garten leeren
 - Keine Texte im Kinderbereich, nur Klicken (kein Ziehen), Touch funktioniert
 
+## Inhalte (seit 2.0)
+- **Nachsing-Spiel** (Sprechblasen-Knopf): Wesen singen eine Folge vor, das Kind singt nach (Mikrofon) oder tippt die Wesen in der richtigen Reihenfolge an. 3 Runden, ohne Scheitern
+- **Vier Jahreszeiten**: Landschaft, Bäume, Blüten, Laub oder Schnee, Accessoires der Wesen. Wechselt jeden Tag oder fest im Elternbereich
+- **9 Sprachen** (de, en, zh_CN, fr, es, pt_BR, ja, ru, pl) in `i18n/strings.csv`, automatisch nach Systemsprache oder im Elternbereich. Store-Texte in `STORE.md`
+- Wachstumsstufen Keimling → Knospe → Wesen, Freude- und Gähn-Gesicht, Wippen im Takt
+
 ## Grafik (2.0)
 - 9 eigene Figuren (Pilz, Kürbis, Schnecke, Käfer, Vogel, Frosch, Blume, Glockenblume, Sonnenblume) mit farbigen Konturen, Schatten und Glanzlichtern
 - 6 Beete organisch auf drei Tiefen, Weg, Baum, Zaun, Steine, Gießkanne, Blattrahmen im Vordergrund
 - Farbige, dicke Icons; Elternbereich mit eigenem Theme; Regenbogen nach dem Regenkonzert
-- Store-Bilder: `tools/store_shots.tscn` (Screenshots 1920×1080, Capsules) → `build/store/`
+- Store-Bilder: `tools/store_shots.tscn -- shots <ordner> <sprache>` (7 Screenshots 1920×1080 mit übersetzten Überschriften) und `-- capsule <ordner>` → erst zum finalen Release rendern
+- Tests: `tests/run_tests.gd`, `tests/smoke.tscn`, `tests/seasons.tscn`, `tests/echo.tscn`
 
 ## Bauen und testen
 ```bash
