@@ -7,11 +7,11 @@ const ParentPanel := preload("res://scripts/parent_panel.gd")
 const SAVE_PATH := "user://garden.json"
 ## Organic layout on three depths: back, middle, front.
 const BED_POSITIONS := [
-	Vector2(400, 455), Vector2(880, 450),
-	Vector2(205, 580), Vector2(1075, 575),
-	Vector2(500, 690), Vector2(800, 685),
+	Vector2(410, 462), Vector2(875, 455),
+	Vector2(195, 585), Vector2(1080, 580),
+	Vector2(495, 695), Vector2(805, 690),
 ]
-const BED_SCALE := [0.78, 0.8, 0.9, 0.92, 1.0, 1.02]
+const BED_SCALE := [0.95, 0.97, 1.1, 1.12, 1.18, 1.2]
 const BTN_CONDUCTOR := Vector2(95, 95)
 const BTN_SUN := Vector2(1035, 95)
 const BTN_RAIN := Vector2(1170, 95)
@@ -50,6 +50,8 @@ var _rainbow := 0.0
 var _rain_amount := 0.0
 var _btn_offset := Vector2.ZERO
 var _btn_alpha := 1.0
+var _flashes: Array = [] ## [pos, age]
+var _shake := 0.0
 var hide_ui := false ## key art: no buttons, no empty beds
 var _overlay := Node2D.new()
 
@@ -261,13 +263,22 @@ func _concert() -> void:
 
 
 func _fireworks() -> void:
-	var cols := [Color("ff7a6b"), Color("ffc93c"), Color("4cc3b5"), Color("6fa8e8"), Color("9b6bd6"), Color("ff8fb8")]
+	var sets := [[Color("ff7a6b"), Color("ffc93c"), Color("fff3a0")], [Color("4cc3b5"), Color("6fa8e8"), Color("ffffff")],
+		[Color("9b6bd6"), Color("ff8fb8"), Color("ffe066")], [Color("7cc86a"), Color("ffc93c"), Color("ffffff")]]
+	var beat := 60.0 / _bpm()
 	for burst in 4:
-		var origin := Vector2(330 + burst * 205, 150 + (burst % 2) * 60)
+		var origin := Vector2(330 + [0, 2, 1, 3][burst] * 205, 140 + (burst % 2) * 50)
+		var cols: Array = sets[burst]
 		for i in 24:
-			var a := TAU * i / 30.0 + randf() * 0.2
-			var size: float = [5.0, 8.0, 12.0][i % 3]
-			_confetti.append([origin, Vector2(cos(a), sin(a)) * randf_range(120, 300) * (1.3 - size / 20.0), -burst * 0.22, cols[(i + burst) % cols.size()], randf() * TAU, size])
+			var a := TAU * i / 24.0
+			var size: float = [6.0, 9.0, 13.0][i % 3]
+			_confetti.append([origin, Vector2(cos(a), sin(a)) * (240.0 - size * 6.0), 0.0, cols[i % 3], 0.0, size])
+		_flashes.append([origin, 0.0])
+		_shake = 4.0
+		for c in beds:
+			if c:
+				c.celebrate_hop(randf() * 0.08)
+		await get_tree().create_timer(beat / 2.0).timeout
 
 
 ## Seconds until the garden falls asleep (parents choose 4, 6 or 10 minutes).
@@ -425,6 +436,11 @@ func _process(delta: float) -> void:
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
 	_rain_amount = move_toward(_rain_amount, 1.0 if weather == Weather.RAIN else 0.0, delta * 0.5)
 	_rainbow = maxf(0.0, _rainbow - delta / 12.0)
+	for fl in _flashes:
+		fl[1] += delta
+	_flashes = _flashes.filter(func(fl): return fl[1] < 0.2)
+	_shake = move_toward(_shake, 0.0, delta * 20.0)
+	position = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * _shake
 	if state == State.RECORDING:
 		_rec_time += delta
 		if _rec_time >= Audio.RECORD_SECONDS:
@@ -473,6 +489,10 @@ func _tick_music(delta: float) -> void:
 	var roots := [0.0, -3.0, 0.0, -5.0] # C, A, C, G
 	var root: float = roots[bar] + _shift()
 	var fade := 1.0 - _evening()
+	if half % 2 == 0:
+		for c in beds:
+			if c:
+				c.pulse()
 	if half % 4 == 0:
 		Audio.play_music(_bass, root, linear_to_db(0.9 * fade + 0.01))
 	elif half % 2 == 1 and randf() < 0.55:
@@ -533,15 +553,18 @@ func _draw() -> void:
 		_draw_cloud(Vector2(x, 60 + fmod(i * 61.0, 150.0)), 0.7 + fmod(i * 0.37, 0.6), cloud_col)
 
 	# Hills with aerial perspective: the far one is pale and bluish
-	var far := Color("a9d49a").lerp(Color("c7a487"), dusk * 0.4).lerp(Color("2a3558"), night)
-	var mid := Color("86c56d").lerp(Color("b08a62"), dusk * 0.3).lerp(Color("1d3a3c"), night)
-	var near := Color("8cc665").lerp(Color("8a7a4a"), dusk * 0.3).lerp(Color("183232"), night)
+	var haze := Color("a6c8e0")
+	var far := Color("9bd47a").lerp(haze, 0.3).lerp(Color("c7a487"), dusk * 0.4).lerp(Color("2a3558"), night)
+	var mid := Color("7cc260").lerp(haze, 0.15).lerp(Color("b08a62"), dusk * 0.3).lerp(Color("1d3a3c"), night)
+	var mid2 := Color("6db654").lerp(Color("a07a52"), dusk * 0.3).lerp(Color("1a3634"), night)
+	var near := Color("5fae4c").lerp(Color("8cc665"), 0.45).lerp(Color("8a7a4a"), dusk * 0.3).lerp(Color("183232"), night)
 	far = far.lerp(far.darkened(0.2), 1.0 - vivid)
 	mid = mid.lerp(mid.darkened(0.2), 1.0 - vivid)
 	near = near.lerp(near.darkened(0.15), 1.0 - vivid)
 	_draw_hill(325, 110, 0.004, 1.0, far)
 	_draw_tree(Vector2(1150, 352), 0.75, night, vivid) # a little tree far away
-	_draw_hill(372, 55, 0.007, 2.3, mid)
+	_draw_hill(355, 70, 0.006, 2.3, mid)
+	_draw_hill(386, 30, 0.009, 4.1, mid2)
 	_gradient_rect(Rect2(-2000, 385, 5280, 2400), near.lightened(0.06), Color("5fa14a").lerp(near, 0.4 + night * 0.6).darkened(0.08))
 	draw_rect(Rect2(-2000, 2785, 5280, 2000), near.darkened(0.12))
 
@@ -579,9 +602,18 @@ func _draw() -> void:
 			var fc: Color = [Color("ffffff"), Color("ffc93c"), Color("ff8fb8")][i % 3]
 			draw_circle(gp + Vector2(sway, -16), 4.0, fc.lerp(tuft, night * 0.7))
 
+	for i in 40:
+		var fp := Vector2(fmod(i * 233.0 + 40.0, 1300.0) - 10, 405 + fmod(i * 131.0, 300.0))
+		var fc: Color = [Color("ff8fb1"), Color("ffe066"), Color("ffffff")][i % 3]
+		var r := 3.0 + fmod(i, 3.0)
+		for q in 4:
+			draw_circle(fp + Vector2.from_angle(q * PI / 2) * r, r * 0.8, fc.lerp(tuft, night * 0.7))
+		draw_circle(fp, r * 0.6, Color("ffc93c").lerp(tuft, night * 0.7))
+
 	# Stones and the watering can
 	for st in [Vector3(560, 470, 14), Vector3(745, 520, 18), Vector3(470, 600, 12), Vector3(820, 615, 16)]:
 		var sc := Color("c9c2b8").lerp(Color("3b3d55"), night * 0.8)
+		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z + 3, st.z * 0.6 + 3), sc.darkened(0.45))
 		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z, st.z * 0.6), sc)
 		draw_arc(Vector2(st.x, st.y), st.z, PI + 0.3, TAU - 0.3, 10, Color(1, 1, 1, 0.35 * (1.0 - night)), 2.0)
 	_draw_can(Vector2(1165, 650), night)
@@ -606,6 +638,8 @@ func _draw() -> void:
 			var glow := 0.5 + 0.5 * sin(_t * 3.0 + i)
 			for g in 3:
 				draw_circle(b + Vector2(0, -8 * k), (22 + g * 11 + glow * 6) * k, Color(1, 0.95, 0.6, (0.24 - g * 0.06) * (0.6 + glow * 0.4)))
+			var ring := fmod(_t * 0.8 + i * 0.3, 1.0)
+			draw_arc(b + Vector2(0, -8 * k), (30 + ring * 50) * k, 0, TAU, 40, Color(1, 1, 1, (0.6 - ring * 0.6) * 0.9), 4.0 * k, true)
 			var bounce := absf(sin(_t * 2.0 + i)) * 5.0
 			var grow := 1.0
 			var sb := b
@@ -706,9 +740,16 @@ func _rain_mood() -> float:
 func _draw_tree(base: Vector2, k: float, night: float, vivid: float) -> void:
 	var trunk := Color("8a5a3b").lerp(Color("2a2430"), night * 0.8)
 	var crown := Color("5fa14a").lerp(Color("1d3a3c"), night).lerp(Color("4f7a50"), 1.0 - vivid)
-	draw_colored_polygon(PackedVector2Array([base + Vector2(-14, 0) * k, base + Vector2(-9, -110) * k, base + Vector2(9, -110) * k, base + Vector2(14, 0) * k]), trunk)
-	for b in [Vector3(-40, -130, 52), Vector3(36, -138, 50), Vector3(0, -180, 60), Vector3(-10, -120, 44)]:
+	var trunk_pts := PackedVector2Array([base + Vector2(-14, 0) * k, base + Vector2(-9, -110) * k, base + Vector2(9, -110) * k, base + Vector2(14, 0) * k])
+	draw_colored_polygon(trunk_pts, trunk)
+	trunk_pts.append(trunk_pts[0])
+	draw_polyline(trunk_pts, trunk.darkened(0.5), 3.5, true)
+	var blobs := [Vector3(-40, -130, 52), Vector3(36, -138, 50), Vector3(0, -180, 60), Vector3(-10, -120, 44)]
+	for b in blobs:
+		draw_circle(base + Vector2(b.x, b.y) * k, b.z * k + 3.5, crown.darkened(0.5))
+	for b in blobs:
 		draw_circle(base + Vector2(b.x, b.y) * k, b.z * k, crown)
+	draw_circle(base + Vector2(14, -120) * k, 34 * k, crown.darkened(0.1))
 	draw_circle(base + Vector2(-22, -196) * k, 20 * k, crown.lightened(0.12))
 	for a in [Vector2(-30, -150), Vector2(26, -170), Vector2(4, -128)]:
 		draw_circle(base + a * k, 6 * k, Color("ff7a6b").lerp(crown, night * 0.8))
@@ -744,6 +785,9 @@ func _draw_can(at: Vector2, night: float) -> void:
 
 
 func _draw_overlay() -> void:
+	for fl in _flashes:
+		var u: float = fl[1] / 0.12
+		_overlay.draw_circle(fl[0], 60.0 * minf(u, 1.0), Color(1, 1, 1, 0.5 * (1.0 - minf(fl[1] / 0.2, 1.0))))
 	for cf in _confetti:
 		if cf[2] > 0.0:
 			var al: float = clampf(2.4 - float(cf[2]), 0.0, 1.0)
@@ -848,12 +892,17 @@ func _draw_hill(base_y: float, amp: float, freq: float, ph: float, col: Color) -
 	var pts := PackedVector2Array()
 	for x in range(-600, 1901, 40):
 		pts.append(Vector2(x, base_y - amp * (0.5 + 0.5 * sin(x * freq + ph))))
+	var ridge := pts.duplicate()
 	pts.append(Vector2(1900, 900))
 	pts.append(Vector2(-600, 900))
 	draw_colored_polygon(pts, col)
+	draw_polyline(ridge, col.darkened(0.18), 3.0, true)
 
 
 func _draw_cloud(c: Vector2, k: float, col: Color) -> void:
+	var rim := Color(col.darkened(0.25), col.a * 0.6)
+	for b in [Vector3(-40, 0, 28), Vector3(-10, -16, 36), Vector3(26, -6, 30), Vector3(52, 6, 20), Vector3(0, 8, 30)]:
+		draw_circle(c + Vector2(b.x, b.y) * k, b.z * k + 3.0, rim)
 	for b in [Vector3(-40, 0, 28), Vector3(-10, -16, 36), Vector3(26, -6, 30), Vector3(52, 6, 20), Vector3(0, 8, 30)]:
 		draw_circle(c + Vector2(b.x, b.y) * k, b.z * k, col)
 	draw_circle(c + Vector2(-14, -24) * k, 14 * k, Color(1, 1, 1, col.a * 0.4))

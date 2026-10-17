@@ -28,7 +28,7 @@ void fragment() {
 	// paper grain and blotchy wash
 	float grain = noise(frag * 0.9) * 0.5 + noise(frag * 0.23) * 0.5;
 	float wash = noise(frag * 0.012);
-	c *= 1.0 + (grain - 0.5) * 0.07 * strength + (wash - 0.5) * 0.06 * strength;
+	c *= 1.0 + (grain - 0.5) * 0.035 * strength + (wash - 0.5) * 0.04 * strength;
 	c = mix(c, c * vec3(1.03, 1.0, 0.95), 0.5 * strength);
 	// warm vignette
 	float v = smoothstep(0.95, 0.35, length(SCREEN_UV - 0.5));

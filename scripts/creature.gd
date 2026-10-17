@@ -31,6 +31,7 @@ var freq := 261.63
 var grow := 0.0
 var stage := 2.0 ## 0..1 sprout, 1..2 bud, then the full being grows in
 var joy := 0.0
+var beat_pulse := 0.0
 var yawn_amt := 0.0
 var bow_amt := 0.0
 var hop := 0.0
@@ -91,6 +92,15 @@ func sing(shift: float) -> void:
 	var top: float = -HEIGHTS[species] - 10.0
 	for i in 2:
 		_notes.append([Vector2(randf_range(-25, 25), top), Vector2(randf_range(-35, 35), -80), -i * 0.15, PALETTE[species]])
+
+
+## Gentle bop on the music's beat.
+func pulse() -> void:
+	if sleeping or grow < 0.9:
+		return
+	beat_pulse = 1.0
+	var tw := create_tween()
+	tw.tween_property(self, "beat_pulse", 0.0, 0.3).set_trans(Tween.TRANS_SINE)
 
 
 ## Tapped: a happy face with squinted eyes and a big smile.
@@ -242,7 +252,7 @@ func _draw() -> void:
 	# soft ground shadow
 	draw_colored_polygon(_ell_pts(Vector2(0, 4), Vector2(62 * s, 14 * s), 0.0, 24), Color(0.1, 0.05, 0.1, 0.22))
 	var sway := sin(_t * (0.6 if sleeping else 1.6)) * 0.045 * (1.0 - _sleep_blend * 0.7)
-	var squash := 1.0 + 0.16 * sing_amp
+	var squash := 1.0 + 0.16 * sing_amp + 0.06 * beat_pulse
 	var lean := sway + bow_amt * 0.45 + _look.x * 0.05
 	draw_set_transform(Vector2(0, -hop * 40.0 - _bob * 8.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	match species:
@@ -538,6 +548,8 @@ func _star(c: Vector2, r: float, col: Color) -> void:
 
 ## Saturated note with a white contour so it reads on any sky.
 func _note(c: Vector2, alpha: float, col: Color) -> void:
+	draw_set_transform(c, 0.0, Vector2.ONE * 1.5)
+	c = Vector2.ZERO
 	var fill := Color(col.darkened(0.15), alpha)
 	var rim := Color(1, 1, 1, alpha)
 	draw_colored_polygon(_ell_pts(c, Vector2(14, 11), -0.35, 18), rim)
@@ -546,6 +558,7 @@ func _note(c: Vector2, alpha: float, col: Color) -> void:
 	draw_colored_polygon(_ell_pts(c, Vector2(11, 8), -0.35, 18), fill)
 	draw_line(c + Vector2(9, -2), c + Vector2(9, -34), fill, 4.0)
 	draw_line(c + Vector2(9, -34), c + Vector2(22, -24), fill, 4.0)
+	draw_set_transform(Vector2.ZERO)
 
 
 func _draw_zzz() -> void:

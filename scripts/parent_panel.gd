@@ -65,7 +65,7 @@ func _ready() -> void:
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(520, 0)
+	panel.custom_minimum_size = Vector2(580, 0)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("fbf7ee")
 	style.set_corner_radius_all(18)
@@ -132,18 +132,62 @@ func _show_gate() -> void:
 	_button("Zurück zum Garten", queue_free)
 
 
+func _card() -> VBoxContainer:
+	var card := PanelContainer.new()
+	var st := _box_style(Color("f1e9dc"), 16)
+	st.set_content_margin_all(12)
+	card.add_theme_stylebox_override("panel", st)
+	_box.add_child(card)
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 6)
+	card.add_child(v)
+	return v
+
+
+func _link(text: String) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.flat = true
+	b.add_theme_font_size_override("font_size", 17)
+	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		b.add_theme_color_override(k, Color("b04a4a"))
+	b.add_theme_color_override("font_disabled_color", Color("7a7488"))
+	var empty := StyleBoxEmpty.new()
+	for k in ["normal", "hover", "pressed", "focus", "disabled"]:
+		b.add_theme_stylebox_override(k, empty)
+	_box.add_child(b)
+	return b
+
+
+func _confirming(b: Button, ask: String, done: String, sig: Signal) -> void:
+	var original := b.text
+	b.pressed.connect(func():
+		if b.text == ask:
+			sig.emit()
+			b.text = done
+			b.disabled = true
+		else:
+			b.text = ask
+			get_tree().create_timer(4.0).timeout.connect(func():
+				if is_instance_valid(b) and b.text == ask:
+					b.text = original))
+
+
 func _show_settings() -> void:
 	_clear()
-	_label("Elternbereich", 30)
+	_label("Elternbereich", 28)
+	var outer := _box
 
+	# Sound
+	_box = _card()
 	var mic := Button.new()
 	mic.toggle_mode = true
 	mic.button_pressed = settings.mic
-	mic.custom_minimum_size = Vector2(0, 48)
-	mic.add_theme_font_size_override("font_size", 20)
+	mic.custom_minimum_size = Vector2(0, 46)
+	mic.add_theme_font_size_override("font_size", 19)
 	var paint_mic := func(on: bool):
-		mic.text = "Mikrofon: an" if on else "Mikrofon: aus"
-		var st := _box_style(Color("4cc3b5") if on else Color("b9b4c4"), 24)
+		mic.text = "Mikrofon: an" if on else "Mikrofon: aus – eingebaute Klänge"
+		var st := _box_style(Color("4cc3b5") if on else Color("b9b4c4"), 23)
 		for k in ["normal", "hover", "pressed", "hover_pressed"]:
 			mic.add_theme_stylebox_override(k, st)
 	paint_mic.call(settings.mic)
@@ -152,64 +196,73 @@ func _show_settings() -> void:
 		paint_mic.call(on)
 		changed.emit(settings))
 	_box.add_child(mic)
-	_label("Ohne Mikrofon wachsen Wesen mit eingebauten Klängen.", 16)
-
-	_label("Lautstärke", 18)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	var vl := Label.new()
+	vl.text = "Lautstärke"
+	vl.add_theme_font_size_override("font_size", 17)
+	vl.add_theme_color_override("font_color", INK)
+	row.add_child(vl)
 	var vol := HSlider.new()
 	vol.min_value = 0.0
 	vol.max_value = 1.0
 	vol.step = 0.05
 	vol.value = settings.volume
-	vol.custom_minimum_size = Vector2(0, 36)
+	vol.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vol.custom_minimum_size = Vector2(0, 34)
 	vol.value_changed.connect(func(v):
 		settings.volume = v
 		changed.emit(settings))
-	_box.add_child(vol)
+	row.add_child(vol)
+	_box.add_child(row)
 
-	_label("Der Garten schläft ein nach", 18)
-	var day := OptionButton.new()
-	day.add_theme_font_size_override("font_size", 20)
-	for m in [4, 6, 10]:
-		day.add_item("%d Minuten" % m, m)
-	day.select([4, 6, 10].find(int(settings.get("day_minutes", 6))))
-	day.item_selected.connect(func(idx):
-		settings.day_minutes = day.get_item_id(idx)
-		changed.emit(settings))
-	_box.add_child(day)
-
+	# Play time and concert
+	_box = _card()
+	_label("Der Garten schläft ein nach", 17)
+	var chips := HBoxContainer.new()
+	chips.alignment = BoxContainer.ALIGNMENT_CENTER
+	chips.add_theme_constant_override("separation", 8)
+	var group := ButtonGroup.new()
+	for m in [4, 6, 10, 15]:
+		var chip := Button.new()
+		chip.text = "%d Min" % m
+		chip.toggle_mode = true
+		chip.button_group = group
+		chip.custom_minimum_size = Vector2(96, 40)
+		chip.add_theme_font_size_override("font_size", 18)
+		chip.add_theme_stylebox_override("normal", _box_style(Color("d8d1c5"), 20))
+		chip.add_theme_stylebox_override("hover", _box_style(Color("cbc3b5"), 20))
+		chip.add_theme_stylebox_override("pressed", _box_style(Color("4cc3b5"), 20))
+		chip.add_theme_stylebox_override("hover_pressed", _box_style(Color("4cc3b5"), 20))
+		chip.add_theme_color_override("font_color", INK)
+		chip.button_pressed = int(settings.get("day_minutes", 6)) == m
+		chip.pressed.connect(func():
+			settings.day_minutes = m
+			changed.emit(settings))
+		chips.add_child(chip)
+	_box.add_child(chips)
 	var exp := _button("Konzert als Audiodatei speichern", func(): pass)
-	var exp_info := _label("", 15)
+	var exp_info := _label("", 14)
+	exp_info.visible = false
 	exp.pressed.connect(func():
 		var path: String = exporter.call() if exporter.is_valid() else ""
-		if path.is_empty():
-			exp_info.text = "Noch keine Wesen im Garten."
-		else:
-			exp_info.text = "Gespeichert: " + path)
+		exp_info.visible = true
+		exp_info.text = "Noch keine Wesen im Garten." if path.is_empty() else "Gespeichert: " + path)
 
-	var gap := Control.new()
-	gap.custom_minimum_size = Vector2(0, 6)
-	_box.add_child(gap)
-	var del := _button("Alle Aufnahmen löschen", func(): pass)
-	for k in ["normal", "hover", "pressed"]:
-		del.add_theme_stylebox_override(k, _box_style(DANGER if k != "hover" else DANGER.lightened(0.1)))
-	del.pressed.connect(func():
-		if del.text.begins_with("Wirklich"):
-			delete_recordings.emit()
-			del.text = "Aufnahmen gelöscht ✓"
-			del.disabled = true
-		else:
-			del.text = "Wirklich alle Aufnahmen löschen?")
-	var clr := _button("Garten neu beginnen", func(): pass)
-	for k in ["normal", "hover", "pressed"]:
-		clr.add_theme_stylebox_override(k, _box_style(DANGER if k != "hover" else DANGER.lightened(0.1)))
-	clr.pressed.connect(func():
-		if clr.text.begins_with("Wirklich"):
-			clear_garden.emit()
-			clr.text = "Garten ist leer ✓"
-			clr.disabled = true
-		else:
-			clr.text = "Wirklich den ganzen Garten leeren?")
-
-	_label("Aufnahmen bleiben nur auf diesem Gerät. Kein Upload, keine Werbung, keine Analyse.", 15)
-	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)
+	# Trust + quiet destructive actions
+	_box = outer
+	_label("Offline · Keine Werbung · Keine Datenerhebung · Aufnahmen bleiben auf diesem Gerät", 14)
+	var sep := HSeparator.new()
+	_box.add_child(sep)
+	var links := HBoxContainer.new()
+	links.alignment = BoxContainer.ALIGNMENT_CENTER
+	links.add_theme_constant_override("separation", 18)
+	_box.add_child(links)
+	var del := _link("Aufnahmen löschen")
+	del.reparent(links)
+	_confirming(del, "Wirklich alle löschen?", "Aufnahmen gelöscht ✓", delete_recordings)
+	var clr := _link("Garten neu beginnen")
+	clr.reparent(links)
+	_confirming(clr, "Wirklich alles leeren?", "Garten ist leer ✓", clear_garden)
 	_button("Zurück zum Garten", queue_free)
+	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)

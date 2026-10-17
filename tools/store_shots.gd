@@ -93,7 +93,7 @@ func _shots() -> void:
 			c.sing(0.0)
 	main._fireworks()
 	await get_tree().create_timer(0.75).timeout
-	await _shot("02_konzert.png", "Ein Konzert aus Kinderstimmen")
+	await _shot("03_konzert.png", "Ein Konzert aus Kinderstimmen")
 
 	# 3: rain, then rainbow
 	main.weather = main.Weather.NONE
@@ -106,13 +106,13 @@ func _shots() -> void:
 		if c:
 			c.celebrate_hop(randf() * 0.2)
 	await get_tree().create_timer(0.2).timeout
-	await _shot("03_regenbogen.png", "Sonne, Regen, Regenbogen")
+	await _shot("04_regenbogen.png", "Sonne, Regen, Regenbogen")
 
 	# 4: good night
 	main._rainbow = 0.0
 	main._go_to_sleep()
 	await get_tree().create_timer(3.0).timeout
-	await _shot("04_gute_nacht.png", "Gute Nacht, Garten")
+	await _shot("02_gute_nacht.png", "Gute Nacht, Garten")
 
 	# 5: for parents
 	main._wake_up()
@@ -128,10 +128,13 @@ func _shots() -> void:
 func _capsule() -> void:
 	main.hide_ui = true
 	_fill([0, 8, -1, -1, -1, -1])
+	for c in main.beds:
+		if c:
+			c.modulate = Color(0.85, 0.88, 0.95) # supporting cast, pushed back
 	await get_tree().create_timer(0.5).timeout
 	# hero: a big singing beetle in front, friends either side
 	var Creature := load("res://scripts/creature.gd")
-	var heroes := [[3, Vector2(640, 700), 2.1], [5, Vector2(330, 690), 1.35], [6, Vector2(960, 700), 1.35]]
+	var heroes := [[3, Vector2(640, 705), 2.3]]
 	for h in heroes:
 		var c = Creature.new()
 		c.setup(int(h[0]) / 3, int(h[0]) % 3, SoundLab.make_wav(SoundLab.preset(0).samples, 22050), 261.63)
@@ -147,7 +150,7 @@ func _capsule() -> void:
 	var title := Control.new()
 	title.set_script(load("res://tools/title.gd"))
 	title.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	title.offset_top = 14
+	title.offset_top = 6
 	title.offset_bottom = 180
 	title.size_px = int(get_viewport().get_visible_rect().size.y * 0.19)
 	_layer.add_child(title)
