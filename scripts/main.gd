@@ -1012,6 +1012,12 @@ func _draw() -> void:
 		sun_col.a = lerpf(0.35, 1.0, vivid)
 		for k in 3:
 			draw_circle(sun_c, 48 + k * 22 + sin(_t * 1.5) * 3, Color(sun_col, 0.10 * sun_col.a))
+		# soft rotating rays
+		for k in 12:
+			var a := _t * 0.08 + k * TAU / 12.0
+			var d1 := Vector2.from_angle(a - 0.07)
+			var d2 := Vector2.from_angle(a + 0.07)
+			draw_colored_polygon(PackedVector2Array([sun_c + d1 * 50, sun_c + d1 * (74 + (k % 2) * 14), sun_c + d2 * (74 + (k % 2) * 14), sun_c + d2 * 50]), Color(sun_col, 0.1 * sun_col.a * (1.0 - ev)))
 		draw_circle(sun_c, 40, sun_col)
 		draw_circle(sun_c + Vector2(-11, -11), 15, Color(1, 1, 1, 0.3 * sun_col.a))
 
@@ -1103,6 +1109,10 @@ func _draw() -> void:
 			draw_colored_polygon(_ellipse_pts(Vector2(x, 470 + i * 90), Vector2(170, 34)), Color(0.1, 0.2, 0.15, 0.07 * (1.0 - dusk)))
 
 	_draw_pond(Vector2(1165, 478), top, night)
+	_draw_dragonfly(Vector2(1165, 440), night)
+	_draw_ladybug(Vector2(690, 418), night)
+	for fc in [Vector3(700, 432, 0), Vector3(905, 426, 1), Vector3(292, 452, 2), Vector3(640, 545, 3), Vector3(30, 470, 4)]:
+		_draw_flower_cluster(Vector2(fc.x, fc.y), int(fc.z), night)
 
 	# Stones and the watering can
 	for st in [Vector3(560, 470, 14), Vector3(745, 520, 18), Vector3(470, 600, 12), Vector3(820, 615, 16)]:
@@ -1368,6 +1378,59 @@ func _draw_tree(base: Vector2, k: float, night: float, vivid: float) -> void:
 	if season == Season.WINTER:
 		for b in [Vector3(-40, -170, 34), Vector3(36, -176, 30), Vector3(0, -226, 40)]:
 			draw_circle(base + Vector2(b.x, b.y) * k, b.z * k, Color("f6f9fc").lerp(Color("2a3558"), night * 0.7))
+
+
+## A small tuft of flowers that sways; colours follow the season.
+func _draw_flower_cluster(at: Vector2, seed_i: int, night: float) -> void:
+	var stem := Color("4f8f3a").lerp(Color("1d3a3c"), night * 0.8)
+	if season == Season.WINTER:
+		_draw_ellipse(at + Vector2(0, 2), Vector2(26, 9), Color("f4f7fb").lerp(Color("3b3f7a"), night * 0.7))
+		return
+	var cols := [Color("ff8fb8"), Color("ffd45c"), Color("b58cf0"), Color("ff7a6b"), Color("ffffff")]
+	if season == Season.AUTUMN:
+		cols = [Color("c9674e"), Color("e09a3e"), Color("9b6bd6"), Color("d4704f"), Color("f0c05a")]
+	for j in 5:
+		var h := 22.0 + fmod(seed_i * 7.0 + j * 5.3, 14.0)
+		var base := at + Vector2(-20 + j * 10, (j % 2) * 3)
+		var sway := sin(_t * 1.8 + seed_i + j * 0.7) * 4.0
+		var top := base + Vector2(sway, -h)
+		draw_line(base, top, stem, 2.5)
+		_draw_ellipse(base + Vector2(sway * 0.4 - 4, -h * 0.45), Vector2(5, 2.5), stem.lightened(0.2))
+		var c: Color = cols[(seed_i + j) % cols.size()].lerp(Color("2a3558"), night * 0.75)
+		for q in 5:
+			var a := TAU * q / 5.0 + seed_i
+			draw_circle(top + Vector2.from_angle(a) * 4.5, 4.0, c)
+		draw_circle(top, 2.8, Color("ffe27a").lerp(Color("2a3558"), night * 0.6))
+
+
+## A turquoise dragonfly hovering and darting above the pond.
+func _draw_dragonfly(c: Vector2, night: float) -> void:
+	if night > 0.3 or weather == Weather.RAIN or season == Season.WINTER:
+		return
+	var hop := floorf(_t / 2.5)
+	var p := c + Vector2(sin(hop * 2.3) * 50, cos(hop * 1.7) * 22 - 20) + Vector2(sin(_t * 3.0) * 2, cos(_t * 4.0) * 2)
+	var body := Color("2f8f9a")
+	var wing := Color(0.85, 0.95, 1.0, 0.45 + 0.2 * sin(_t * 40.0))
+	for side in [-1.0, 1.0]:
+		_draw_ellipse(p + Vector2(-3, side * 7), Vector2(9, 3.5), wing)
+		_draw_ellipse(p + Vector2(4, side * 6), Vector2(8, 3), wing)
+	draw_line(p + Vector2(-20, 0), p + Vector2(6, 0), body, 3.0)
+	draw_circle(p + Vector2(8, 0), 3.5, body.darkened(0.2))
+
+
+## A ladybug walking along the fence rail.
+func _draw_ladybug(fence: Vector2, night: float) -> void:
+	if night > 0.3 or season == Season.WINTER:
+		return
+	var u := fmod(_t * 0.03, 2.0)
+	u = u if u < 1.0 else 2.0 - u
+	var p := fence + Vector2(u * 250.0, -26.0 - u * 6.0 - 4.0)
+	var dir := 1.0 if fmod(_t * 0.03, 2.0) < 1.0 else -1.0
+	draw_circle(p, 5.5, Color("d93b3b"))
+	draw_circle(p + Vector2(5 * dir, 0), 3, Color("2b2340"))
+	draw_line(p + Vector2(0, -5), p + Vector2(0, 5), Color("2b2340"), 1.0)
+	draw_circle(p + Vector2(-2, -2), 1.2, Color("2b2340"))
+	draw_circle(p + Vector2(-2, 2.5), 1.2, Color("2b2340"))
 
 
 func _draw_fence(at: Vector2, night: float) -> void:
