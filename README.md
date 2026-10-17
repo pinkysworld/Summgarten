@@ -30,8 +30,10 @@ for p in macOS Windows Linux; do "/Applications/Godot 4.7.app/Contents/MacOS/God
 ```
 Ergebnisse in `build/` (macOS universal, ad-hoc signiert, mit Mikrofon-Berechtigungstext; Windows x86_64; Linux/Steam Deck x86_64).
 
+## macOS signieren und notarisieren
+`bash tools/release_macos.sh` → `build/macos-signed/Klanggarten-macOS.zip` (Developer ID, Hardened Runtime, notarisiert, Ticket angeheftet).
+
 ## Offen vor Steam-Veröffentlichung
-- macOS: mit Developer-ID signieren und notarisieren (aktuell nur ad-hoc)
 - Windows: Icon/Metadaten per rcedit, optional Code-Signatur
 - Steamworks: App-ID, Depots, Store-Seite (Texte siehe `STORE.md`), Steam-Deck-Test mit Headset
 - Test mit echten Kindern; pädagogische Begründung mit Literatur belegen
