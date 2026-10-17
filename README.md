@@ -1,4 +1,4 @@
-# Klanggarten 1.3.0
+# Klanggarten 2.0.0
 
 Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen und Wesen wachsen, die den Klang pentatonisch korrigiert im Takt vorsingen. Konzept: [Klanggarten – Spielkonzept.md](Klanggarten%20–%20Spielkonzept.md).
 
@@ -17,6 +17,12 @@ Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen un
 - Garten und Aufnahmen werden lokal gespeichert (`user://`), Begrüßung beim Start
 - Elternbereich (kleiner Kreis oben rechts) hinter Rechenaufgabe: Mikrofon an/aus, Lautstärke, Tageslänge (4/6/10 min), Konzert als WAV in „Dokumente“ speichern, Aufnahmen löschen, Garten leeren
 - Keine Texte im Kinderbereich, nur Klicken (kein Ziehen), Touch funktioniert
+
+## Grafik (2.0)
+- 9 eigene Figuren (Pilz, Kürbis, Schnecke, Käfer, Vogel, Frosch, Blume, Glockenblume, Sonnenblume) mit farbigen Konturen, Schatten und Glanzlichtern
+- 6 Beete organisch auf drei Tiefen, Weg, Baum, Zaun, Steine, Gießkanne, Blattrahmen im Vordergrund
+- Farbige, dicke Icons; Elternbereich mit eigenem Theme; Regenbogen nach dem Regenkonzert
+- Store-Bilder: `tools/store_shots.tscn` (Screenshots 1920×1080, Capsules) → `build/store/`
 
 ## Bauen und testen
 ```bash

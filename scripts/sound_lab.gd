@@ -172,6 +172,13 @@ static func make_wav(samples: PackedFloat32Array, rate: int) -> AudioStreamWAV:
 	return wav
 
 
+## Species index (pitch * 3 + loud) a preset grows into, without synthesising it.
+static func preset_species(index: int) -> int:
+	var notes := [-12, -8, -5, -3, 0, 2, 4, 7, 9, 12, 14, 16]
+	var freq := BASE_FREQ * pow(2.0, notes[index % PRESET_COUNT] / 12.0)
+	return pitch_class(freq) * 3 + index % 3
+
+
 ## Twelve friendly built-in sounds for playing without a microphone.
 ## Returns {samples, freq, pitch, loud}.
 static func preset(index: int, rate: int = 22050) -> Dictionary:

@@ -9,7 +9,7 @@ func _ready() -> void:
 	await get_tree().process_frame
 	main._clear_garden()
 	main.settings.mic = false
-	for i in [0, 1, 2, 4, 5, 6, 7]:
+	for i in [0, 1, 2, 4, 5]:
 		main._plant(i)
 		await get_tree().create_timer(0.3).timeout
 	await get_tree().create_timer(1.5).timeout
