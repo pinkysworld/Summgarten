@@ -122,6 +122,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		if c:
 			var hit := Rect2(BED_POSITIONS[i] + Vector2(-c.radius() - 20, -c.height() - 20), Vector2(c.radius() * 2 + 40, c.height() + 50))
 			if hit.has_point(p):
+				c.cheer()
 				c.sing(_shift())
 				return
 		elif p.distance_to(BED_POSITIONS[i]) < 105 * BED_SCALE[i]:
@@ -202,7 +203,10 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 	c.sang.connect(_on_sang)
 	if fresh:
 		c.grow_in()
-		get_tree().create_timer(0.9).timeout.connect(func(): if is_instance_valid(c): c.sing(_shift()))
+		get_tree().create_timer(2.3).timeout.connect(func():
+			if is_instance_valid(c):
+				c.cheer()
+				c.sing(_shift()))
 	else:
 		c.grow = 1.0
 
@@ -215,7 +219,7 @@ func _greet() -> void:
 			c.grow = 0.0
 			get_tree().create_timer(delay).timeout.connect(func():
 				if is_instance_valid(c):
-					c.grow_in(1.0)
+					c.grow_in(1.0, false)
 					c.sing(_shift()))
 			delay += 0.5
 
@@ -386,7 +390,10 @@ func _go_to_sleep() -> void:
 		if c:
 			c.sleeping = true
 			var pitch := randf_range(0.8, 1.4)
-			get_tree().create_timer(delay).timeout.connect(func(): Audio.play_ambient(_yawn, pitch, 6.0))
+			get_tree().create_timer(delay).timeout.connect(func():
+				Audio.play_ambient(_yawn, pitch, 6.0)
+				if is_instance_valid(c):
+					c.yawn())
 			delay += 0.7
 
 

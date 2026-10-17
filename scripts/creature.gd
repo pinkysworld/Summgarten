@@ -29,6 +29,9 @@ var stream: AudioStream
 var freq := 261.63
 
 var grow := 0.0
+var stage := 2.0 ## 0..1 sprout, 1..2 bud, then the full being grows in
+var joy := 0.0
+var yawn_amt := 0.0
 var bow_amt := 0.0
 var hop := 0.0
 var sing_amp := 0.0
@@ -62,10 +65,17 @@ func radius() -> float:
 	return 75.0 * scale.x
 
 
-func grow_in(duration := 1.4) -> void:
+func grow_in(duration := 1.4, stages := true) -> void:
 	grow = 0.0
 	var tw := create_tween()
+	if stages:
+		stage = 0.0
+		tw.tween_property(self, "stage", 1.0, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.tween_property(self, "stage", 2.0, 0.7).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	else:
+		stage = 2.0
 	tw.tween_property(self, "grow", 1.0, duration).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+	await tw.finished
 	var cols := [Color("fff3a0"), Color.WHITE, PALETTE[species].lightened(0.3)]
 	for i in 26:
 		var a := randf() * TAU
@@ -81,6 +91,21 @@ func sing(shift: float) -> void:
 	var top: float = -HEIGHTS[species] - 10.0
 	for i in 2:
 		_notes.append([Vector2(randf_range(-25, 25), top), Vector2(randf_range(-35, 35), -80), -i * 0.15, PALETTE[species]])
+
+
+## Tapped: a happy face with squinted eyes and a big smile.
+func cheer() -> void:
+	var tw := create_tween()
+	tw.tween_property(self, "joy", 1.0, 0.1)
+	tw.tween_interval(0.6)
+	tw.tween_property(self, "joy", 0.0, 0.3)
+
+
+func yawn() -> void:
+	var tw := create_tween()
+	tw.tween_property(self, "yawn_amt", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
+	tw.tween_interval(0.4)
+	tw.tween_property(self, "yawn_amt", 0.0, 0.5).set_trans(Tween.TRANS_SINE)
 
 
 func bow() -> void:
@@ -208,6 +233,9 @@ func _leaf(at: Vector2, ang: float, length: float, c: Color) -> void:
 # ------------------------------------------------------------- main draw
 
 func _draw() -> void:
+	if stage < 2.0:
+		_draw_stage()
+		return
 	var s := grow
 	if s <= 0.08:
 		return
@@ -236,6 +264,28 @@ func _draw() -> void:
 	for n in _notes:
 		if n[2] > 0.0:
 			_note(n[0], clampf(1.6 - float(n[2]), 0.0, 1.0), n[3])
+
+
+## Sprout (stage 0..1) and bud (1..2) before the being appears.
+func _draw_stage() -> void:
+	var green := Color("5fa14a")
+	var c: Color = PALETTE[species]
+	var k := clampf(stage, 0.0, 1.0)
+	var wob := sin(_t * 6.0) * 0.08
+	draw_set_transform(Vector2.ZERO, wob, Vector2.ONE * (0.6 + 0.4 * k))
+	var h := 30.0 + 40.0 * clampf(stage, 0.0, 2.0) / 2.0
+	_stem(Vector2(0, 0), Vector2(0, -h), 4.0, green, 6.0)
+	_leaf(Vector2(0, -h * 0.55), -2.6, 26 + 8 * k, Color("7cc86a"))
+	_leaf(Vector2(0, -h * 0.65), -0.5, 26 + 8 * k, Color("7cc86a"))
+	if stage >= 1.0:
+		var b := clampf(stage - 1.0, 0.0, 1.0)
+		var bud := _ell_pts(Vector2(0, -h - 14 * b), Vector2(16, 22) * b + Vector2(2, 2), 0.0, 20)
+		_poly(bud, c)
+		_shine(Vector2(-5, -h - 22 * b), Vector2(4, 6) * b + Vector2(1, 1))
+		if b > 0.5:
+			draw_arc(Vector2(-6, -h - 12), 3.5, 0.2, PI - 0.2, 6, INK, 2.0, true)
+			draw_arc(Vector2(6, -h - 12), 3.5, 0.2, PI - 0.2, 6, INK, 2.0, true)
+	draw_set_transform(Vector2.ZERO)
 
 
 # ------------------------------------------------------------- species
@@ -436,7 +486,9 @@ func _face(c: Vector2, k: float, cheeks := true) -> void:
 
 func _eyes(at: Array, k: float) -> void:
 	for e in at:
-		if _sleep_blend > 0.5 or _blink > 0.3:
+		if joy > 0.3 and _sleep_blend < 0.5:
+			draw_arc(e + Vector2(0, 3 * k), 7 * k, PI + 0.3, TAU - 0.3, 10, INK, 3.5, true)
+		elif _sleep_blend > 0.5 or _blink > 0.3 or yawn_amt > 0.4:
 			draw_arc(e, 6 * k, 0.2, PI - 0.2, 10, INK, 3.0, true)
 		else:
 			draw_circle(e, 9 * k, Color.WHITE)
@@ -453,7 +505,17 @@ func _cheeks(c: Vector2, k: float) -> void:
 
 func _mouth(m: Vector2, k: float, wide := false) -> void:
 	var w := (16.0 if wide else 8.0) * k
-	if sing_amp > 0.08:
+	if yawn_amt > 0.05:
+		draw_colored_polygon(_ell_pts(m, Vector2(w * 0.8, (4 + 12 * yawn_amt) * k), 0.0, 18), INK)
+		draw_colored_polygon(_ell_pts(m + Vector2(0, (3 + 6 * yawn_amt) * k), Vector2(w * 0.45, 3 * k), 0.0, 12), Color("ff7a8a"))
+	elif joy > 0.1 and sing_amp <= 0.08:
+		var pts := PackedVector2Array()
+		for i in 13:
+			var a := PI * i / 12.0
+			pts.append(m + Vector2(cos(a) * w * 1.2, -2 * k + sin(a) * (8 * joy) * k))
+		draw_colored_polygon(pts, INK)
+		draw_colored_polygon(_ell_pts(m + Vector2(0, 3 * k * joy), Vector2(w * 0.5, 2.5 * k * joy + 0.5), 0.0, 12), Color("ff7a8a"))
+	elif sing_amp > 0.08:
 		draw_colored_polygon(_ell_pts(m, Vector2(w * 0.9, (3 + 10 * sing_amp) * k), 0.0, 18), INK)
 		draw_colored_polygon(_ell_pts(m + Vector2(0, (2 + 5 * sing_amp) * k), Vector2(w * 0.5, 3 * k), 0.0, 12), Color("ff7a8a"))
 	elif _sleep_blend > 0.5:

@@ -8,6 +8,7 @@ const INK := Color("2f2a4a")
 var main
 var out := "user://"
 var _headline: Label
+var _layer: CanvasLayer
 
 
 func _ready() -> void:
@@ -33,6 +34,10 @@ func _ready() -> void:
 	_headline.add_theme_color_override("font_outline_color", INK)
 	_headline.add_theme_constant_override("outline_size", 16)
 	layer.add_child(_headline)
+	var sf := SystemFont.new()
+	sf.font_names = PackedStringArray(["Arial Rounded MT Bold", "Chalkboard SE", "Arial"])
+	_headline.add_theme_font_override("font", sf)
+	_layer = layer
 	if mode == "capsule":
 		await _capsule()
 	else:
@@ -138,10 +143,14 @@ func _capsule() -> void:
 		c.sing_amp = 0.9
 		for k in 3:
 			c._notes.append([Vector2(randf_range(-70, 70), -c.HEIGHTS[c.species] - 20 - k * 30), Vector2(randf_range(-20, 20), -40), 0.3 + k * 0.2, c.PALETTE[c.species]])
-	_headline.offset_top = 40
-	_headline.add_theme_font_size_override("font_size", 120)
-	_headline.add_theme_constant_override("outline_size", 34)
-	_headline.text = "Klanggarten"
+	_headline.text = ""
+	var title := Control.new()
+	title.set_script(load("res://tools/title.gd"))
+	title.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	title.offset_top = 14
+	title.offset_bottom = 180
+	title.size_px = int(get_viewport().get_visible_rect().size.y * 0.19)
+	_layer.add_child(title)
 	for f in 3:
 		await get_tree().process_frame
 	get_viewport().get_texture().get_image().save_png(out.path_join("capsule_%dx%d.png" % [get_viewport().size.x, get_viewport().size.y]))

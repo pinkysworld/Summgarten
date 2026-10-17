@@ -12,7 +12,13 @@ func _ready() -> void:
 	for i in [0, 1, 2, 4, 5]:
 		main._plant(i)
 		await get_tree().create_timer(0.3).timeout
-	await get_tree().create_timer(1.5).timeout
+	await _shot(out + "/growing.png")
+	await get_tree().create_timer(2.5).timeout
+	for c in main.beds:
+		if c:
+			c.cheer()
+			break
+	await get_tree().create_timer(0.15).timeout
 	await _shot(out + "/day.png")
 	main._set_weather(main.Weather.RAIN)
 	main._concert()
