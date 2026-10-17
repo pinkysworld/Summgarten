@@ -19,7 +19,16 @@ const BTN_PARENT := Vector2(1240, 200)
 const BTN_R := 56.0
 
 enum Weather { NONE, SUN, RAIN }
-enum State { DAY, RECORDING, CONCERT, NIGHT }
+enum State { DAY, RECORDING, CONCERT, NIGHT, ECHO }
+enum Season { SPRING, SUMMER, AUTUMN, WINTER }
+
+## Per season: near, mid, mid2, far ground, tree crown, fruit, path, flower count.
+const SEASONS := [
+	[Color("8fd16a"), Color("86cf6c"), Color("7cc862"), Color("a8dc90"), Color("7cc86a"), Color("ffb3d1"), Color("ecd6a8"), 70],
+	[Color("7fbd5a"), Color("7cc260"), Color("6db654"), Color("9bd47a"), Color("5fa14a"), Color("ff7a6b"), Color("e9d3a6"), 40],
+	[Color("b5b25a"), Color("c9a24a"), Color("b8913e"), Color("d6b884"), Color("e08a3c"), Color("c0392b"), Color("dcc59a"), 8],
+	[Color("eef3f8"), Color("e3ebf3"), Color("d7e1ec"), Color("f2f6fa"), Color("3f6b55"), Color("ffffff"), Color("c9d3de"), 0],
+]
 
 var state := State.DAY
 var weather := Weather.NONE
@@ -52,7 +61,10 @@ var _btn_offset := Vector2.ZERO
 var _btn_alpha := 1.0
 var _flashes: Array = [] ## [pos, age]
 var _shake := 0.0
-var hide_ui := false ## key art: no buttons, no empty beds
+var hide_ui := false
+var season := Season.SUMMER
+var _auto_season := 1
+var _season_parts: Array = [] ## falling petals / leaves / snow: [pos, phase] ## key art: no buttons, no empty beds
 var _overlay := Node2D.new()
 
 
@@ -87,6 +99,8 @@ func _ready() -> void:
 	_load()
 	Audio.set_volume(settings.volume)
 	_apply_language()
+	_apply_season()
+	_apply_season()
 	_greet()
 
 
@@ -201,6 +215,7 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 	c.scale = Vector2.ONE * BED_SCALE[i]
 	c.z_index = int(BED_POSITIONS[i].y / 100.0) - 3 # deeper beds behind
 	c.setup(pitch, loud, wav, freq)
+	c.season = season
 	add_child(c)
 	beds[i] = c
 	c.sang.connect(_on_sang)
@@ -412,6 +427,9 @@ func _go_to_sleep() -> void:
 func _wake_up() -> void:
 	state = State.DAY
 	day_time = 0.0
+	_auto_season = (_auto_season + 1) % 4
+	_apply_season()
+	_save()
 	for c in beds:
 		if c:
 			c.sleeping = false
@@ -437,6 +455,12 @@ func _process(delta: float) -> void:
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
 	_rain_amount = move_toward(_rain_amount, 1.0 if weather == Weather.RAIN else 0.0, delta * 0.5)
 	_rainbow = maxf(0.0, _rainbow - delta / 12.0)
+	var fall := 70.0 if season == Season.WINTER else 45.0
+	for sp in _season_parts:
+		sp[1] += delta * (1.2 if season != Season.WINTER else 0.6)
+		sp[0] += Vector2(sin(sp[1]) * 30.0 - 12.0, fall) * delta
+		if sp[0].y > 770:
+			sp[0] = Vector2(randf() * 1400 - 60, -10)
 	for fl in _flashes:
 		fl[1] += delta
 	_flashes = _flashes.filter(func(fl): return fl[1] < 0.2)
@@ -467,7 +491,7 @@ func _tick_ambience(delta: float) -> void:
 	if state == State.NIGHT:
 		Audio.play_ambient(_cricket, randf_range(0.9, 1.1), randf_range(-6.0, 0.0))
 		_amb_timer = randf_range(1.2, 3.0)
-	elif weather != Weather.RAIN and _evening() < 0.6:
+	elif weather != Weather.RAIN and _evening() < 0.6 and season != Season.WINTER:
 		Audio.play_ambient(_bird, randf_range(0.8, 1.3), randf_range(-8.0, -2.0))
 		_amb_timer = randf_range(4.0, 10.0)
 	else:
@@ -555,10 +579,11 @@ func _draw() -> void:
 
 	# Hills with aerial perspective: the far one is pale and bluish
 	var haze := Color("a6c8e0")
-	var far := Color("9bd47a").lerp(haze, 0.3).lerp(Color("c7a487"), dusk * 0.4).lerp(Color("2a3558"), night)
-	var mid := Color("7cc260").lerp(haze, 0.15).lerp(Color("b08a62"), dusk * 0.3).lerp(Color("1d3a3c"), night)
-	var mid2 := Color("6db654").lerp(Color("a07a52"), dusk * 0.3).lerp(Color("1a3634"), night)
-	var near := Color("5fae4c").lerp(Color("8cc665"), 0.45).lerp(Color("8a7a4a"), dusk * 0.3).lerp(Color("183232"), night)
+	var sc: Array = SEASONS[season]
+	var far: Color = sc[3].lerp(haze, 0.3).lerp(Color("c7a487"), dusk * 0.4).lerp(Color("2a3558"), night)
+	var mid: Color = sc[1].lerp(haze, 0.15).lerp(Color("b08a62"), dusk * 0.3).lerp(Color("1d3a3c"), night)
+	var mid2: Color = sc[2].lerp(Color("a07a52"), dusk * 0.3).lerp(Color("1a3634"), night)
+	var near: Color = sc[0].lerp(Color("8a7a4a"), dusk * 0.3).lerp(Color("183232"), night)
 	far = far.lerp(far.darkened(0.2), 1.0 - vivid)
 	mid = mid.lerp(mid.darkened(0.2), 1.0 - vivid)
 	near = near.lerp(near.darkened(0.15), 1.0 - vivid)
@@ -574,7 +599,7 @@ func _draw() -> void:
 	_draw_fence(Vector2(1000, 425), night)
 
 	# Winding path from the front into the garden
-	var path_col := Color("e9d3a6").lerp(Color("4a4560"), night * 0.8).lerp(Color("bfae8c"), 1.0 - vivid)
+	var path_col: Color = sc[6].lerp(Color("4a4560"), night * 0.8).lerp(Color("bfae8c"), 1.0 - vivid)
 	var path := PackedVector2Array()
 	var path_r := PackedVector2Array()
 	for i in 21:
@@ -593,17 +618,17 @@ func _draw() -> void:
 		_draw_ellipse(sp, Vector2(9, 5) * (1.0 - u * 0.6), path_col.darkened(0.12))
 
 	# Grass tufts and tiny flowers (deterministic)
-	var tuft := near.darkened(0.22)
+	var tuft := near.darkened(0.22) if season != Season.WINTER else Color("b9c8d8").lerp(Color("2a3558"), night)
 	for i in 70:
 		var gp := Vector2(fmod(i * 157.0, 1320.0) - 20, 400 + fmod(i * 89.0, 320.0))
 		var sway := sin(_t * 1.3 + i) * 3.0
 		for k in 3:
 			draw_line(gp + Vector2((k - 1) * 4, 0), gp + Vector2((k - 1) * 7 + sway, -12 - k * 3), tuft, 2.5)
-		if i % 6 == 0:
+		if i % 6 == 0 and season != Season.WINTER:
 			var fc: Color = [Color("ffffff"), Color("ffc93c"), Color("ff8fb8")][i % 3]
 			draw_circle(gp + Vector2(sway, -16), 4.0, fc.lerp(tuft, night * 0.7))
 
-	for i in 40:
+	for i in int(sc[7]):
 		var fp := Vector2(fmod(i * 233.0 + 40.0, 1300.0) - 10, 405 + fmod(i * 131.0, 300.0))
 		var fc: Color = [Color("ff8fb1"), Color("ffe066"), Color("ffffff")][i % 3]
 		var r := 3.0 + fmod(i, 3.0)
@@ -613,9 +638,9 @@ func _draw() -> void:
 
 	# Stones and the watering can
 	for st in [Vector3(560, 470, 14), Vector3(745, 520, 18), Vector3(470, 600, 12), Vector3(820, 615, 16)]:
-		var sc := Color("c9c2b8").lerp(Color("3b3d55"), night * 0.8)
-		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z + 3, st.z * 0.6 + 3), sc.darkened(0.45))
-		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z, st.z * 0.6), sc)
+		var stone := Color("c9c2b8").lerp(Color("3b3d55"), night * 0.8)
+		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z + 3, st.z * 0.6 + 3), stone.darkened(0.45))
+		_draw_ellipse(Vector2(st.x, st.y), Vector2(st.z, st.z * 0.6), stone)
 		draw_arc(Vector2(st.x, st.y), st.z, PI + 0.3, TAU - 0.3, 10, Color(1, 1, 1, 0.35 * (1.0 - night)), 2.0)
 	_draw_can(Vector2(1165, 650), night)
 
@@ -626,6 +651,8 @@ func _draw() -> void:
 		var b: Vector2 = BED_POSITIONS[i]
 		var k: float = BED_SCALE[i]
 		var soil := Color("7a4a2e").lerp(Color("2a2430"), ev * 0.6)
+		if season == Season.WINTER:
+			soil = Color("8a6a55").lerp(Color("2a2430"), ev * 0.6)
 		_draw_ellipse(b + Vector2(0, 14 * k), Vector2(118, 34) * k, Color(0, 0, 0, 0.12))
 		_draw_ellipse(b + Vector2(0, 8 * k), Vector2(112, 32) * k, soil.darkened(0.3))
 		_draw_ellipse(b + Vector2(0, 4 * k), Vector2(102, 25) * k, soil)
@@ -666,7 +693,7 @@ func _draw() -> void:
 			var f := 0.5 + 0.5 * sin(_t * 2.5 + i * 1.7)
 			draw_circle(fp, 10, Color(1, 1, 0.5, 0.15 * f))
 			draw_circle(fp, 3.5, Color(1, 1, 0.6, 0.9 * f))
-	elif weather != Weather.RAIN:
+	elif weather != Weather.RAIN and season != Season.WINTER:
 		for i in 3:
 			var bp := Vector2(fmod(_t * 40.0 + i * 450.0, 1500.0) - 100, 250 + sin(_t * 0.9 + i * 2.0) * 80 + i * 40)
 			var flap := absf(sin(_t * 12.0 + i))
@@ -696,6 +723,16 @@ func _draw_front() -> void:
 		var s := sin(_t * 1.2 + i) * 4.0
 		_front.draw_colored_polygon(PackedVector2Array([Vector2(x - 12, 740), Vector2(x + s, 740 - h), Vector2(x + 12, 740)]), leaf2)
 
+	for sp in _season_parts:
+		var p: Vector2 = sp[0]
+		var ph: float = sp[1]
+		match season:
+			Season.SPRING:
+				_front.draw_colored_polygon(_front_ellipse(p, Vector2(6, 3.5), ph), Color("ffc1da").lerp(Color("3b3f7a"), night * 0.6))
+			Season.AUTUMN:
+				_front.draw_colored_polygon(_front_ellipse(p, Vector2(9, 4.5), ph), [Color("e08a3c"), Color("c0392b"), Color("ffc93c")][int(ph * 10.0) % 3].lerp(Color("3b3f7a"), night * 0.6))
+			Season.WINTER:
+				_front.draw_circle(p, 3.0 + fmod(ph * 7.0, 2.5), Color(1, 1, 1, 0.9))
 	if weather == Weather.RAIN:
 		for r in _rain:
 			_front.draw_line(r, r + Vector2(-6, 18), Color(0.85, 0.9, 1.0, 0.6), 2.0)
@@ -734,13 +771,38 @@ func _front_leaf(at: Vector2, ang: float, length: float, col: Color) -> void:
 	_front.draw_line(at, at + Vector2(length * 0.85, 0).rotated(ang), col.lightened(0.15), 3.0, true)
 
 
+func _front_ellipse(c: Vector2, r: Vector2, rot: float) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in 12:
+		var a := TAU * i / 12.0
+		pts.append(c + Vector2(cos(a) * r.x, sin(a) * r.y).rotated(rot))
+	return pts
+
+
+func set_season(s_: int) -> void:
+	season = s_
+	_season_parts.clear()
+	if season != Season.SUMMER:
+		var n := 70 if season == Season.WINTER else 26
+		for i in n:
+			_season_parts.append([Vector2(randf() * 1400 - 60, randf() * 760), randf() * TAU])
+	for c in beds:
+		if c:
+			c.season = season
+
+
+func _apply_season() -> void:
+	var chosen := int(settings.get("season", -1))
+	set_season(chosen if chosen >= 0 else _auto_season)
+
+
 func _rain_mood() -> float:
 	return _rain_amount
 
 
 func _draw_tree(base: Vector2, k: float, night: float, vivid: float) -> void:
 	var trunk := Color("8a5a3b").lerp(Color("2a2430"), night * 0.8)
-	var crown := Color("5fa14a").lerp(Color("1d3a3c"), night).lerp(Color("4f7a50"), 1.0 - vivid)
+	var crown: Color = SEASONS[season][4].lerp(Color("1d3a3c"), night).lerp(Color("4f7a50"), 1.0 - vivid)
 	var trunk_pts := PackedVector2Array([base + Vector2(-14, 0) * k, base + Vector2(-9, -110) * k, base + Vector2(9, -110) * k, base + Vector2(14, 0) * k])
 	draw_colored_polygon(trunk_pts, trunk)
 	trunk_pts.append(trunk_pts[0])
@@ -753,7 +815,10 @@ func _draw_tree(base: Vector2, k: float, night: float, vivid: float) -> void:
 	draw_circle(base + Vector2(14, -120) * k, 34 * k, crown.darkened(0.1))
 	draw_circle(base + Vector2(-22, -196) * k, 20 * k, crown.lightened(0.12))
 	for a in [Vector2(-30, -150), Vector2(26, -170), Vector2(4, -128)]:
-		draw_circle(base + a * k, 6 * k, Color("ff7a6b").lerp(crown, night * 0.8))
+		draw_circle(base + a * k, (9 if season == Season.SPRING else 6) * k, SEASONS[season][5].lerp(crown, night * 0.8))
+	if season == Season.WINTER:
+		for b in [Vector3(-40, -170, 34), Vector3(36, -176, 30), Vector3(0, -226, 40)]:
+			draw_circle(base + Vector2(b.x, b.y) * k, b.z * k, Color("f6f9fc").lerp(Color("2a3558"), night * 0.7))
 
 
 func _draw_fence(at: Vector2, night: float) -> void:
@@ -996,7 +1061,7 @@ func _read_pcm(file: String) -> PackedFloat32Array:
 func _save() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
-		f.store_string(JSON.stringify({"version": 1, "settings": settings, "beds": bed_data, "next_preset": _next_preset}))
+		f.store_string(JSON.stringify({"version": 1, "settings": settings, "beds": bed_data, "next_preset": _next_preset, "auto_season": _auto_season}))
 
 
 func _load() -> void:
@@ -1008,6 +1073,7 @@ func _load() -> void:
 	if data.has("settings"):
 		settings.merge(data.settings, true)
 	_next_preset = int(data.get("next_preset", 0))
+	_auto_season = int(data.get("auto_season", 1))
 	var saved: Array = data.get("beds", [])
 	for i in mini(saved.size(), bed_data.size()):
 		var d = saved[i]

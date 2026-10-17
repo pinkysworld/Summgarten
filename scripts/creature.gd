@@ -32,6 +32,7 @@ var grow := 0.0
 var stage := 2.0 ## 0..1 sprout, 1..2 bud, then the full being grows in
 var joy := 0.0
 var beat_pulse := 0.0
+var season := 1 ## 0 spring flower, 1 none, 2 leaf, 3 knit hat
 var yawn_amt := 0.0
 var bow_amt := 0.0
 var hop := 0.0
@@ -265,6 +266,7 @@ func _draw() -> void:
 		Species.DAISY: _draw_daisy()
 		Species.BELL: _draw_bell()
 		_: _draw_sunflower()
+	_draw_accessory()
 	draw_set_transform(Vector2.ZERO)
 	if _sleep_blend > 0.5:
 		_draw_zzz()
@@ -483,6 +485,35 @@ func _draw_sunflower() -> void:
 		var r := sqrt(float(i)) * 9.0
 		draw_circle(center + Vector2(cos(a), sin(a)) * r, 2.6, _col(Color("5e3b1a")))
 	_face(center + Vector2(0, 6), 1.15)
+
+
+## Head top for seasonal accessories, per species.
+const HEAD_TOP := [Vector2(-30, -166), Vector2(-28, -116), Vector2(46, -116), Vector2(-26, -138), Vector2(-14, -134),
+	Vector2(-38, -132), Vector2(-26, -176), Vector2(10, -198), Vector2(-30, -224)]
+
+
+func _draw_accessory() -> void:
+	var at: Vector2 = HEAD_TOP[species]
+	match season:
+		0: # a little blossom tucked on the head
+			for i in 5:
+				var a := TAU * i / 5.0
+				_circ(at + Vector2(cos(a), sin(a)) * 7, 6, Color("ffc1da"))
+			_circ(at, 5, Color("ffd84d"))
+		2: # an autumn leaf
+			_leaf(at + Vector2(-6, 4), -2.2, 30, Color("e08a3c"))
+		3: # knitted hat with pompom
+			var k := 1.35
+			var o := at + Vector2(30, 8) - Vector2(30, 8) * k
+			var hat := PackedVector2Array()
+			for i in 13:
+				var a := PI + PI * i / 12.0
+				hat.append(o + Vector2(30 + cos(a) * 28, 6 + sin(a) * 26) * k)
+			_poly(hat, Color("e05a5a"))
+			for st in 3:
+				draw_line(o + Vector2(14 + st * 16, -14) * k, o + Vector2(14 + st * 16, 2) * k, _col(Color("b83a3a")), 2.0, true)
+			_poly(PackedVector2Array([o + Vector2(-2, 2) * k, o + Vector2(62, 2) * k, o + Vector2(62, 13) * k, o + Vector2(-2, 13) * k]), Color("fff3e0"))
+			_circ(o + Vector2(30, -24) * k, 9 * k, Color("fff3e0"))
 
 
 # ------------------------------------------------------------- face
