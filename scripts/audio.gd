@@ -25,7 +25,7 @@ func _ready() -> void:
 	AudioServer.set_bus_name(rec, "Record")
 	AudioServer.set_bus_mute(rec, true) # never echo the mic to the speakers
 	_capture = AudioEffectCapture.new()
-	_capture.buffer_length = 1.0
+	_capture.buffer_length = 2.0
 	AudioServer.add_bus_effect(rec, _capture)
 
 	var garden := AudioServer.bus_count

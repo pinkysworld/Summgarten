@@ -1,6 +1,6 @@
 extends Node
 ## Renders Steam store screenshots (1920x1080) and capsule art.
-## godot --path . --resolution 1920x1080 res://tools/store_shots.tscn -- shots <outdir> [lang]
+## godot --path . --resolution 1920x1080 res://tools/store_shots.tscn -- shots <outdir> [lang] [WxH]
 ## godot --path . --resolution 1232x706 res://tools/store_shots.tscn -- capsule <outdir>
 ## Headlines are translated (i18n/strings.csv); render once per store language.
 
@@ -19,6 +19,12 @@ func _ready() -> void:
 	out = args[1] if args.size() > 1 else out
 	DirAccess.make_dir_recursive_absolute(out)
 	var lang: String = args[2] if args.size() > 2 else "de"
+	# App Store sizes are taller than most screens; a borderless window may exceed them.
+	if args.size() > 3:
+		var wh := args[3].split("x")
+		get_tree().root.borderless = true
+		get_tree().root.size = Vector2i(int(wh[0]), int(wh[1]))
+		await get_tree().process_frame
 	main = load("res://scenes/main.tscn").instantiate()
 	get_tree().root.add_child.call_deferred(main)
 	await get_tree().process_frame
