@@ -10,6 +10,8 @@ func _ready() -> void:
 	await get_tree().process_frame
 	main._clear_garden()
 	main._help_all = 0.0
+	main.screenshot_mode = true
+	main.set_season(main.Season.SUMMER)
 	for i in 5:
 		main.bed_data[i] = {"preset": [5, 2, 0, 3, 4][i], "gold": i == 3}
 		main._spawn(i, null, false)
@@ -23,10 +25,11 @@ func _ready() -> void:
 	main._press_at(main.BED_POSITIONS[0] + Vector2(0, -50)) # frog: snail answers
 	await get_tree().create_timer(0.7).timeout
 	get_viewport().get_texture().get_image().save_png(out.path_join("toys.png"))
+	print("PARTS ", main._worms.size(), " ", main._apples.size(), " ", main._mill_boost)
 	var ok: bool = main._worms.size() == 1 and main._apples.size() == 2 and main._mill_boost > 0.0
 	# hold on a being for a while: it turns back into a seed
 	main._press_at(main.BED_POSITIONS[4] + Vector2(0, -50))
-	await get_tree().create_timer(2.0).timeout
+	await get_tree().create_timer(2.8).timeout
 	ok = ok and main.beds[4] == null and main.bed_data[4] == null
 	main._set_weather(main.Weather.RAIN)
 	await get_tree().create_timer(2.5).timeout

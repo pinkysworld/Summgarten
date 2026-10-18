@@ -49,6 +49,7 @@ var _hat_vel := 0.0
 var _prev_motion := 0.0
 var _idle_in := randf_range(4.0, 9.0)
 var _head := Vector2.ZERO ## top of the head in local space (after lean), for the thirst bubble
+var shrink := 0.0 ## held down: shrinks and yawns before turning back into a seed
 var golden := false ## rare: a golden being with twinkling stars
 var thirst := 0.0 ## 0 fresh .. 1 very thirsty: droops and fades until watered
 var _thirst_shown := 0.0
@@ -350,6 +351,7 @@ func _draw() -> void:
 		sun_lean = clampf((560.0 - global_position.x) / 1600.0, -0.14, 0.14) # follows the sun
 	var lean := sun_lean + sway * (1.0 - droop * 0.6) + bow_amt * 0.45 + _look.x * 0.05 + droop * 0.22
 	_head = Vector2(0, -hop * 40.0 - _bob * 8.0) + Vector2(0, -HEIGHTS[species] * s * squash).rotated(lean)
+	s *= 1.0 - 0.45 * shrink
 	draw_set_transform(Vector2(0, -hop * 40.0 - _bob * 8.0), lean, Vector2(s / sqrt(squash), s * squash * (1.0 - bow_amt * 0.12)))
 	match species:
 		Species.MUSHROOM: _draw_mushroom()

@@ -919,8 +919,17 @@ func _tick_toys(delta: float) -> void:
 		_worms[k] += delta
 		if _worms[k] > 2.6:
 			_worms.erase(k)
-	# long press on a being: it waves goodbye and becomes a seed again
-	if _hold_t >= 0.0 and _hold_bed >= 0 and state == State.DAY and _t - _hold_t > 1.2:
+	# long press on a being: it shrinks and yawns (let go to stop), then becomes a seed again
+	for i in beds.size():
+		var b = beds[i]
+		if b:
+			var target := 0.0
+			if _hold_t >= 0.0 and i == _hold_bed and state == State.DAY:
+				target = clampf((_t - _hold_t - 0.4) / 1.4, 0.0, 1.0)
+			b.shrink = move_toward(b.shrink, target, delta * 3.0)
+			if target > 0.3:
+				b.yawn_amt = maxf(b.yawn_amt, target)
+	if _hold_t >= 0.0 and _hold_bed >= 0 and state == State.DAY and _t - _hold_t > 1.9:
 		var i := _hold_bed
 		_hold_t = -1.0
 		_hold_bed = -1
@@ -1412,7 +1421,7 @@ func _draw() -> void:
 	var night := clampf(ev * 2.0 - 1.0, 0.0, 1.0)
 	var dusk := clampf(ev * 2.0, 0.0, 1.0)
 	var vivid := clampf(1.0 - _rain_mood(), 0.0, 1.0) # rain greys the world, the rainbow brings colour back
-	var top := Color("6cbbe8").lerp(Color("7b6fc4"), dusk).lerp(Color("1e2246"), night)
+	var top := Color("5cb6f0").lerp(Color("7b6fc4"), dusk).lerp(Color("1e2246"), night)
 	var bottom := Color("e8f4f8").lerp(Color("ffb36b"), dusk).lerp(Color("3b3f7a"), night)
 	if season == Season.WINTER:
 		top = top.lerp(Color("b9c8d8"), 0.75 * (1.0 - dusk))
@@ -2052,7 +2061,7 @@ func _draw_overlay() -> void:
 	_draw_spots()
 	if _hold_t >= 0.0 and _hold_bed >= 0 and beds[_hold_bed] and _t - _hold_t > 0.3:
 		var c = beds[_hold_bed]
-		var u := clampf((_t - _hold_t - 0.3) / 0.9, 0.0, 1.0)
+		var u := clampf((_t - _hold_t - 0.3) / 1.6, 0.0, 1.0)
 		var at: Vector2 = c.global_position + Vector2(0, -c.height() * 0.5)
 		_overlay.draw_arc(at, c.height() * 0.6, -PI / 2, -PI / 2 + TAU * u, 48, Color(1, 1, 1, 0.85), 8.0, true)
 	if state == State.ECHO and not _echo_listen:
@@ -2157,7 +2166,8 @@ func _draw_button(c: Vector2, col: Color, enabled: bool, active: bool) -> void:
 	var press := 1.0 - 0.12 * maxf(0.0, 1.0 - since * 5.0)
 	var p := c - Vector2(0, bounce)
 	# matte painted stone: ink ring, flat fill, a darker belly instead of a glossy glint
-	var r := BTN_R * press * (0.86 if c == BTN_SUN or c == BTN_RAIN else 1.0)
+	var r := BTN_R * press * (0.78 if c == BTN_SUN or c == BTN_RAIN else 0.9)
+	col = col.lerp(Color("bdb6c8"), 0.12)
 	_front.draw_circle(c + Vector2(0, 7), r + 4, Color(0.12, 0.06, 0.1, 0.2))
 	_front.draw_circle(p, r + 4, Color("3a2e4a"))
 	_front.draw_circle(p, r - 2, col)
