@@ -169,6 +169,7 @@ func _shots() -> void:
 		var l := Label.new()
 		l.text = tr(bd[0])
 		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size = Vector2(vs.x * 0.2, 0) # wrap needs a width to measure against
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		l.add_theme_font_size_override("font_size", int(vs.y * 0.045))
