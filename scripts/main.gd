@@ -222,7 +222,7 @@ func _unhandled_input(event: InputEvent) -> void:
 					c.look_toward(get_global_mouse_position())
 	if event is InputEventMouseButton and not event.pressed:
 		_hold_t = -1.0
-		if _can_drag and _can_held and event.position.distance_to(CAN_HOME) > 90.0:
+		if _can_drag and _can_held and get_global_mouse_position().distance_to(CAN_HOME) > 90.0:
 			_can_pos = get_global_mouse_position()
 			_use_can(_can_pos)
 		_can_drag = false
