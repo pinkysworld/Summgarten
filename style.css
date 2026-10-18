@@ -36,5 +36,5 @@ footer a{color:var(--muted);margin:0 8px}
 .doc h2{margin-top:1.4em;font-size:26px}
 [data-l]{display:none}
 html[lang=de] [data-l=de],html[lang=en] [data-l=en]{display:revert}
-.studio{display:inline-flex;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:var(--muted);margin-bottom:14px}
-.studio img{width:200px;height:auto;display:block}
+.studio{display:flex;width:max-content;margin:0 auto 18px !important;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:var(--muted);margin-bottom:14px}
+.studio img{width:260px;height:auto;display:block}
