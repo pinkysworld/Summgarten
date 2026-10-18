@@ -29,7 +29,7 @@ func _ready() -> void:
 	var ok: bool = main._worms.size() == 1 and main._apples.size() == 2 and main._mill_boost > 0.0
 	# hold on a being for a while: it turns back into a seed
 	main._press_at(main.BED_POSITIONS[4] + Vector2(0, -50))
-	await get_tree().create_timer(2.8).timeout
+	await get_tree().create_timer(3.6).timeout
 	ok = ok and main.beds[4] == null and main.bed_data[4] == null
 	main._set_weather(main.Weather.RAIN)
 	await get_tree().create_timer(2.5).timeout

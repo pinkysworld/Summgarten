@@ -15,7 +15,7 @@ const INK := Color("2f2a4a")
 const PAPER := Color("fbf6ee")
 const DANGER := Color("d9534f")
 const LANGS := [["", "Auto"], ["de", "Deutsch"], ["en", "English"], ["zh_CN", "简体中文"], ["fr", "Français"],
-	["es", "Español"], ["pt_BR", "Português (Brasil)"], ["ja", "日本語"], ["ru", "Русский"], ["pl", "Polski"]]
+	["es", "Español"], ["pt_BR", "Português (Brasil)"], ["ja", "日本語"], ["ru", "Русский"], ["pl", "Polski"], ["ar", "العربية"], ["ca", "Català"], ["cs", "Čeština"], ["da", "Dansk"], ["el", "Ελληνικά"], ["fi", "Suomi"], ["he", "עברית"], ["hi", "हिन्दी"], ["hr", "Hrvatski"], ["hu", "Magyar"], ["id", "Bahasa Indonesia"], ["it", "Italiano"], ["ko", "한국어"], ["ms", "Bahasa Melayu"], ["nb", "Norsk bokmål"], ["nl", "Nederlands"], ["pt_PT", "Português (Portugal)"], ["ro", "Română"], ["sk", "Slovenčina"], ["sv", "Svenska"], ["th", "ไทย"], ["tr", "Türkçe"], ["uk", "Українська"], ["vi", "Tiếng Việt"], ["zh_TW", "繁體中文"]]
 
 
 func _box_style(bg: Color, radius := 12) -> StyleBoxFlat:
@@ -32,13 +32,21 @@ func _box_style(bg: Color, radius := 12) -> StyleBoxFlat:
 	return st
 
 
-## Default font plus bundled Noto Sans SC/JP so Chinese and Japanese render
-## everywhere (SteamOS has no CJK system fonts).
+## Default font plus bundled Noto fonts so every App Store language renders
+## everywhere (SteamOS has no CJK, Arabic, Thai ... system fonts).
 static func cjk_font(base: Font = null) -> Font:
 	var f: Font = (base if base else ThemeDB.fallback_font).duplicate()
-	var fb: Array[Font] = [load("res://fonts/NotoSansSC-Bold-subset.otf"), load("res://fonts/NotoSansJP-Bold-subset.otf")]
-	if TranslationServer.get_locale().begins_with("ja"):
-		fb.reverse()
+	var names := ["SC-Bold-subset.otf", "JP-Bold-subset.otf", "KR-Bold-subset.otf", "TC-Bold-subset.otf",
+		"Arabic-Bold.ttf", "Hebrew-Bold.ttf", "Thai-Bold.ttf", "Devanagari-Bold.ttf"]
+	# the font of the current language first, so shared Han characters look right
+	var loc := TranslationServer.get_locale()
+	var first := {"ja": 1, "ko": 2, "zh_TW": 3, "zh_HK": 3}
+	for k in first:
+		if loc.begins_with(k):
+			names.push_front(names.pop_at(first[k]))
+	var fb: Array[Font] = []
+	for n in names:
+		fb.append(load("res://fonts/NotoSans" + n))
 	f.fallbacks = fb
 	return f
 
@@ -377,5 +385,24 @@ func _show_settings() -> void:
 	var clr := _link(tr("RESET"))
 	clr.reparent(links)
 	_confirming(clr, tr("RESET_SURE"), tr("RESET_DONE"), clear_garden)
+	var cr := _link(tr("CREDITS"))
+	cr.reparent(links)
+	cr.pressed.connect(_show_credits)
 	_primary(_button(tr("BACK"), queue_free))
 	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)
+
+
+func _show_credits() -> void:
+	_clear()
+	_label(tr("CREDITS"), 28)
+	_box = _card()
+	_label(tr("CR_GAME"), 15)
+	_label("Michel Nguyen · Minh Nguyen Studios", 21)
+	_label(tr("CR_TEST"), 15)
+	_label("♥", 21)
+	_box = _card()
+	_label(tr("CR_TECH"), 15)
+	_label("Godot Engine – godotengine.org\nMIT License, © Godot Engine contributors, Juan Linietsky, Ariel Manzur", 14)
+	_label("Noto Sans – SIL Open Font License 1.1, © Google LLC", 14)
+	_label(tr("CR_THANKS"), 19)
+	_primary(_button(tr("BACK"), _show_settings))
