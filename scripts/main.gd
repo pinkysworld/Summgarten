@@ -123,6 +123,8 @@ var _worms := {} ## stone index -> age
 var _hog_curl := 0.0
 var _silent_recs := 0
 var _last_singer: Node2D
+var _can_goal := Vector2.ZERO ## finger position: the can glides after it instead of jumping
+var _can_follow := false
 var _can_drag := false ## the can was picked up with this touch: letting go over a being waters it
 var _echo_taps := false ## the microphone heard nothing: this echo game continues with taps
 var _state_time := 0.0
@@ -211,8 +213,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _pad_input(event):
 		return
 	if event is InputEventMouseMotion:
-		if _can_held:
-			_can_pos = get_global_mouse_position()
+		if _can_held and _pour <= 0.0:
+			_can_goal = get_global_mouse_position()
+			_can_follow = true
 		if int(_t * 10) % 2 == 0:
 			for c in beds:
 				if c:
@@ -223,6 +226,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_can_pos = get_global_mouse_position()
 			_use_can(_can_pos)
 		_can_drag = false
+		_can_follow = false
 	if event is InputEventMouseMotion and _hold_t >= 0.0 and event.position.distance_to(_hold_p) > 40.0:
 		_hold_t = -1.0
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
@@ -421,6 +425,7 @@ func _bed_hit(i: int) -> Rect2:
 
 
 func _water_bed(i: int) -> void:
+	_can_follow = false
 	var c = beds[i]
 	var d: Dictionary = bed_data[i]
 	_can_pos = BED_POSITIONS[i] + Vector2(105, -c.height() - 30)
@@ -1142,6 +1147,8 @@ func _process(delta: float) -> void:
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
 	_tick_water(delta)
 	_tick_toys(delta)
+	if _can_follow and _can_held and _pour <= 0.0:
+		_can_pos = _can_pos.lerp(_can_goal, minf(1.0, delta * 16.0))
 	_state_time = 0.0 if state != _last_state else _state_time + delta
 	_last_state = state
 	if _state_time > 75.0 and state in [State.CONCERT, State.ECHO, State.RECORDING]:
