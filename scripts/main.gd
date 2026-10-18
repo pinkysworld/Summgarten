@@ -123,6 +123,10 @@ var _worms := {} ## stone index -> age
 var _hog_curl := 0.0
 var _silent_recs := 0
 var _last_singer: Node2D
+var _can_drag := false ## the can was picked up with this touch: letting go over a being waters it
+var _echo_taps := false ## the microphone heard nothing: this echo game continues with taps
+var _state_time := 0.0
+var _last_state := State.DAY
 
 
 ## Minh Nguyen Studios intro: full on the very first start, short afterwards.
@@ -215,6 +219,10 @@ func _unhandled_input(event: InputEvent) -> void:
 					c.look_toward(get_global_mouse_position())
 	if event is InputEventMouseButton and not event.pressed:
 		_hold_t = -1.0
+		if _can_drag and _can_held and event.position.distance_to(CAN_HOME) > 90.0:
+			_can_pos = get_global_mouse_position()
+			_use_can(_can_pos)
+		_can_drag = false
 	if event is InputEventMouseMotion and _hold_t >= 0.0 and event.position.distance_to(_hold_p) > 40.0:
 		_hold_t = -1.0
 	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
@@ -305,6 +313,9 @@ func _press_at(p: Vector2) -> void:
 		State.RECORDING, State.CONCERT:
 			return
 		State.ECHO:
+			if p.distance_to(BTN_ECHO) < BTN_R:
+				_end_echo()
+				return
 			_echo_tap(p)
 			return
 		State.NIGHT:
@@ -314,7 +325,8 @@ func _press_at(p: Vector2) -> void:
 	if _can_held:
 		_use_can(p)
 		return
-	if p.distance_to(CAN_HOME + Vector2(10, -35)) < 62:
+	if p.distance_to(CAN_HOME + Vector2(10, -35)) < 80:
+		_can_drag = true
 		_can_held = true
 		_can_pos = p
 		Audio.play_music(_pluck, _shift(), -4.0)
@@ -405,7 +417,7 @@ func _use_can(p: Vector2) -> void:
 
 func _bed_hit(i: int) -> Rect2:
 	var c = beds[i]
-	return Rect2(BED_POSITIONS[i] + Vector2(-c.radius() - 20, -c.height() - 20), Vector2(c.radius() * 2 + 40, c.height() + 50))
+	return Rect2(BED_POSITIONS[i] + Vector2(-c.radius() - 45, -c.height() - 40), Vector2(c.radius() * 2 + 90, c.height() + 90))
 
 
 func _water_bed(i: int) -> void:
@@ -595,6 +607,7 @@ func _spotlight(c: Node2D) -> void:
 ## simply replays the phrase. Three phrases, each a little longer.
 func _echo_game() -> void:
 	state = State.ECHO
+	_echo_taps = false
 	var beat := 60.0 / _bpm()
 	var singers := beds.filter(func(c): return c != null)
 	# little ones start with a single note; after a few games phrases get longer
@@ -618,8 +631,11 @@ func _echo_game() -> void:
 			if state != State.ECHO:
 				return
 			var ok := false
-			if settings.mic:
+			if settings.mic and not _echo_taps:
 				ok = await _echo_listen_voice()
+				if not ok:
+					_echo_taps = true # nothing heard: tap the singers instead, never wait in silence
+					ok = await _echo_wait_taps()
 			else:
 				ok = await _echo_wait_taps()
 			if state != State.ECHO:
@@ -637,6 +653,14 @@ func _echo_game() -> void:
 	await get_tree().create_timer(beat * 3.0).timeout
 	if state == State.ECHO:
 		state = State.DAY
+
+
+func _end_echo() -> void:
+	if _echo_listen:
+		Audio.stop_recording()
+	_echo_listen = false
+	_echo_waiting = false
+	state = State.DAY
 
 
 func _echo_play_phrase(beat: float) -> void:
@@ -853,6 +877,22 @@ func _bpm() -> float:
 
 func _creature_count() -> int:
 	return beds.filter(func(c): return c != null).size()
+
+
+## Back to the plain garden from any stuck mode.
+func _recover() -> void:
+	if Audio.recording:
+		Audio.stop_recording()
+	_rec_bed = -1
+	_echo_listen = false
+	_echo_waiting = false
+	_can_held = false
+	_can_pos = CAN_HOME
+	_cam_target = Vector2(640, 360)
+	_cam_zoom = 1.0
+	_stage_light = 0.0
+	_pad_active = false
+	state = State.DAY
 
 
 # ---------------------------------------------------------------- garden toys
@@ -1102,6 +1142,10 @@ func _process(delta: float) -> void:
 	_confetti = _confetti.filter(func(cf): return cf[2] < 2.4)
 	_tick_water(delta)
 	_tick_toys(delta)
+	_state_time = 0.0 if state != _last_state else _state_time + delta
+	_last_state = state
+	if _state_time > 75.0 and state in [State.CONCERT, State.ECHO, State.RECORDING]:
+		_recover() # never leave a child stuck in a mode that stopped responding
 	_beat_kick = maxf(0.0, _beat_kick - delta * 4.0)
 	for i in _wet.size():
 		_wet[i] = maxf(0.0, _wet[i] - delta * 0.4)
