@@ -10,6 +10,12 @@ var exporter: Callable ## returns the saved file path or ""
 var _box: VBoxContainer
 var _answer := 0
 
+## Shared across panel instances: two wrong answers lock the gate for a minute.
+static var _fails := 0
+static var _locked_until := 0
+const LOCK_MS := 60000
+const PRIVACY_URL := "https://minh.systems/Klanggarten/privacy.html"
+
 
 const INK := Color("2f2a4a")
 const PAPER := Color("fbf6ee")
@@ -178,10 +184,13 @@ func _primary(b: Button) -> void:
 
 func _show_gate() -> void:
 	_clear()
+	_label(tr("PARENTS"), 30)
+	if Time.get_ticks_msec() < _locked_until:
+		_show_lock()
+		return
 	var a := randi_range(6, 9)
 	var b := randi_range(6, 9)
 	_answer = a * b
-	_label(tr("PARENTS"), 30)
 	_label(tr("GATE_Q") % [a, b])
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -196,10 +205,33 @@ func _show_gate() -> void:
 		btn.add_theme_font_size_override("font_size", 26)
 		btn.pressed.connect(func():
 			if o == _answer:
+				_fails = 0
 				_show_settings()
-			else:
-				queue_free())
+				return
+			_fails += 1
+			if _fails >= 2:
+				_fails = 0
+				_locked_until = Time.get_ticks_msec() + LOCK_MS
+			_show_gate())
 		row.add_child(btn)
+	_primary(_button(tr("BACK"), queue_free))
+
+
+## Wordless countdown, so it needs no translation.
+func _show_lock() -> void:
+	var count := _label("", 44)
+	var tick := func():
+		count.text = "%d" % ceili((_locked_until - Time.get_ticks_msec()) / 1000.0)
+	tick.call()
+	var timer := Timer.new()
+	timer.wait_time = 0.25
+	timer.autostart = true
+	timer.timeout.connect(func():
+		if Time.get_ticks_msec() >= _locked_until:
+			_show_gate()
+		else:
+			tick.call())
+	count.add_child(timer)
 	_primary(_button(tr("BACK"), queue_free))
 
 
@@ -319,9 +351,13 @@ func _show_settings() -> void:
 		var path: String = exporter.call() if exporter.is_valid() else ""
 		exp_info.visible = true
 		exp_info.text = tr("NO_BEINGS") if path.is_empty() else tr("SAVED") % path)
-	_button(tr("POSTCARDS"), func():
-		DirAccess.make_dir_recursive_absolute("user://postcards")
-		OS.shell_open(ProjectSettings.globalize_path("user://postcards")))
+	# iOS has no user-visible folder to open these in, so the buttons would do nothing.
+	if OS.get_name() == "iOS":
+		exp.visible = false
+	else:
+		_button(tr("POSTCARDS"), func():
+			DirAccess.make_dir_recursive_absolute("user://postcards")
+			OS.shell_open(ProjectSettings.globalize_path("user://postcards")))
 
 	# Language and season
 	_box = _card()
@@ -405,4 +441,6 @@ func _show_credits() -> void:
 	_label("Godot Engine – godotengine.org\nMIT License, © Godot Engine contributors, Juan Linietsky, Ariel Manzur", 14)
 	_label("Noto Sans – SIL Open Font License 1.1, © Google LLC", 14)
 	_label(tr("CR_THANKS"), 19)
+	var priv := _link(PRIVACY_URL.trim_prefix("https://"))
+	priv.pressed.connect(func(): OS.shell_open(PRIVACY_URL))
 	_primary(_button(tr("BACK"), _show_settings))

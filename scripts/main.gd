@@ -329,7 +329,7 @@ func _press_at(p: Vector2) -> void:
 	if _can_held:
 		_use_can(p)
 		return
-	if p.distance_to(CAN_HOME + Vector2(10, -35)) < 80:
+	if p.distance_to(CAN_HOME + Vector2(10, -35)) < 100:
 		_can_drag = true
 		_can_held = true
 		_can_pos = p
@@ -378,6 +378,13 @@ func _press_at(p: Vector2) -> void:
 # ---------------------------------------------------------------- flow
 
 func _plant(i: int) -> void:
+	# Before iOS shows its permission dialog, tell the grown-up what is coming.
+	if settings.mic and OS.get_name() == "iOS" and not settings.get("mic_intro", false):
+		settings.mic_intro = true
+		_save()
+		_help_one["MIC_ASK"] = 9.0
+		_grow_preset(i)
+		return
 	if settings.mic:
 		state = State.RECORDING
 		_rec_bed = i
@@ -397,7 +404,7 @@ func _finish_recording() -> void:
 	if res.is_empty():
 		# No sound (or no mic): never fail, a friendly built-in sound grows instead.
 		_silent_recs += 1
-		if _silent_recs >= 2:
+		if _silent_recs >= 1:
 			_help_one["HELP_MIC"] = 7.0 # tells parents the microphone hears nothing
 		_grow_preset(bed)
 		return
@@ -909,6 +916,22 @@ func _creature_count() -> int:
 	return beds.filter(func(c): return c != null).size()
 
 
+## Leaving the app (home button, call, Siri) ends any recording or game cleanly
+## and silences the garden until it comes back.
+func _notification(what: int) -> void:
+	if not OS.has_feature("mobile"):
+		return
+	if what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		if state != State.DAY and state != State.NIGHT:
+			_recover()
+		elif Audio.recording:
+			Audio.stop_recording()
+		AudioServer.set_bus_mute(0, true)
+	elif what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		AudioServer.set_bus_mute(0, false)
+		_last_input = _t
+
+
 ## Back to the plain garden from any stuck mode.
 func _recover() -> void:
 	if Audio.recording:
@@ -1244,6 +1267,8 @@ func _help_items() -> Array:
 		["HELP_RAIN", BTN_RAIN, Vector2.DOWN],
 		["HELP_CAN", CAN_HOME + Vector2(0, -70), Vector2.UP],
 	]
+	if _help_one.has("MIC_ASK"):
+		items.append(["MIC_ASK", BTN_PARENT + Vector2(-30, 0), Vector2.LEFT])
 	if _help_one.has("HELP_MIC"):
 		items.append(["HELP_MIC", BTN_PARENT + Vector2(-30, 0), Vector2.LEFT])
 	for i in BED_POSITIONS.size():
