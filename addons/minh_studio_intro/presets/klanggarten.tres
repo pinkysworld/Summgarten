@@ -27,3 +27,5 @@ sub_font = ExtResource("3")
 key_sounds = Array[AudioStream]([ExtResource("4"), ExtResource("5"), ExtResource("6")])
 close_sound = ExtResource("7")
 audio_bus = &"Garden"
+hold = 2.0
+short_duration = 2.0
