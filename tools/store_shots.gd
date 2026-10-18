@@ -239,7 +239,9 @@ func _capsule() -> void:
 	title.offset_top = 6
 	title.offset_bottom = 180
 	title.size_px = int(get_viewport().get_visible_rect().size.y * 0.19)
-	_layer.add_child(title)
+	# App Store headers show the app name themselves.
+	if not "notitle" in OS.get_cmdline_user_args():
+		_layer.add_child(title)
 	for f in 3:
 		await get_tree().process_frame
 	get_viewport().get_texture().get_image().save_png(out.path_join("capsule_%dx%d.png" % [get_viewport().size.x, get_viewport().size.y]))
