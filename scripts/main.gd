@@ -514,6 +514,11 @@ func _spawn(i: int, wav: AudioStreamWAV, fresh: bool) -> void:
 	c.scale = Vector2.ONE * BED_SCALE[i] * SPECIES_SCALE[c.species] * (1.0 + float(d.get("size", 0.0)))
 	c.thirst = 1.0 - float(d.get("water", 1.0))
 	c.season = season
+	if d.has("voice"):
+		var vs := _read_pcm(str(d.voice))
+		if not vs.is_empty():
+			c.stream = SoundLab.make_wav(vs, int(d.get("vrate", 44100)))
+			c.freq = float(d.get("vfreq", c.freq))
 	if fresh and not d.has("gold"):
 		d["gold"] = randf() < 0.08 # now and then a rare golden one
 	c.golden = bool(d.get("gold", false))
@@ -693,12 +698,32 @@ func _echo_listen_voice() -> bool:
 	var res := SoundLab.analyze(raw, Audio.mix_rate())
 	if res.is_empty():
 		return false
-	# the first singer answers with the child's own voice
-	Audio.play(SoundLab.make_wav(res.samples, Audio.mix_rate()), res.freq, _shift())
+	# the first singer answers with the child's own voice and keeps it from now on
+	var voice := SoundLab.make_wav(res.samples, Audio.mix_rate())
+	Audio.play(voice, res.freq, _shift())
+	_give_voice(first, res)
 	if is_instance_valid(first):
 		first.cheer()
 	await get_tree().create_timer(minf(2.0, res.samples.size() / float(Audio.mix_rate()))).timeout
 	return true
+
+
+## A being keeps the voice the child sang to it (saved, so it stays after restart).
+func _give_voice(c: Node2D, res: Dictionary) -> void:
+	var i := beds.find(c)
+	if i < 0 or bed_data[i] == null:
+		return
+	var d: Dictionary = bed_data[i]
+	if d.has("voice"):
+		DirAccess.remove_absolute("user://" + str(d.voice))
+	var file := "voice_%d_%d.pcm" % [i, Time.get_unix_time_from_system()]
+	_write_pcm(file, res.samples)
+	d["voice"] = file
+	d["vrate"] = Audio.mix_rate()
+	d["vfreq"] = res.freq
+	c.stream = SoundLab.make_wav(res.samples, Audio.mix_rate())
+	c.freq = res.freq
+	_save()
 
 
 ## No microphone: tap the singers in the same order.
@@ -1633,8 +1658,7 @@ func _draw() -> void:
 	_draw_ellipse(CAN_HOME + Vector2(0, 6), Vector2(74, 22), slab.darkened(0.35))
 	_draw_ellipse(CAN_HOME + Vector2(0, 2), Vector2(70, 19), slab)
 	draw_arc(CAN_HOME + Vector2(0, 2), 62, PI + 0.5, TAU - 0.5, 12, Color(1, 1, 1, 0.4 * (1.0 - night)), 3.0)
-	if not _can_held:
-		_draw_can(self, CAN_HOME, night, 0.0, _can_hint())
+
 
 	# Beds: organic, different sizes, three depths
 	for i in BED_POSITIONS.size():
@@ -1757,6 +1781,9 @@ func _draw_front() -> void:
 			var ph := fmod(_t * 1.7 + i * 0.31, 1.0)
 			_front.draw_arc(sp, 3 + ph * 9, PI, TAU, 8, Color(1, 1, 1, 0.6 * (1.0 - ph) * _rain_amount), 2.0, true)
 
+	if not _can_held:
+		var nt := clampf(_evening() * 2.0 - 1.0, 0.0, 1.0)
+		_draw_can(_front, CAN_HOME, nt, 0.0, _can_hint())
 	if hide_ui or state == State.CONCERT:
 		return # during the concert the stage belongs to the singers
 	# Buttons: thick icons on coloured discs
@@ -2447,6 +2474,13 @@ func _delete_recordings() -> void:
 		var d = bed_data[i]
 		if d and d.has("file"):
 			_remove_bed(i)
+		elif d and d.has("voice"):
+			d.erase("voice")
+			if beds[i]:
+				var keep: Dictionary = d.duplicate()
+				_remove_bed(i)
+				bed_data[i] = keep
+				_spawn(i, null, false)
 	# Remove stray files too.
 	var dir := DirAccess.open("user://")
 	if dir:
@@ -2466,6 +2500,8 @@ func _remove_bed(i: int) -> void:
 	var d = bed_data[i]
 	if d and d.has("file"):
 		DirAccess.remove_absolute("user://" + d.file)
+	if d and d.has("voice"):
+		DirAccess.remove_absolute("user://" + str(d.voice))
 	if beds[i]:
 		beds[i].queue_free()
 	beds[i] = null

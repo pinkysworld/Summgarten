@@ -13,6 +13,43 @@ enum Loud { QUIET, MEDIUM, LOUD }
 
 ## Analyses mono samples. Returns {} for silence, otherwise
 ## {samples, freq, pitch, loud}. `samples` is trimmed, normalised and faded.
+## Removes rumble, hiss and the noise floor between sounds (microphones of
+## tablets are noisy, and normalising would make that crackle audibly).
+static func clean(x: PackedFloat32Array, rate: float) -> PackedFloat32Array:
+	var y := PackedFloat32Array()
+	y.resize(x.size())
+	var hp := exp(-TAU * 90.0 / rate) # high-pass ~90 Hz
+	var lp := 1.0 - exp(-TAU * 7000.0 / rate) # low-pass ~7 kHz
+	var px := 0.0
+	var py := 0.0
+	var l := 0.0
+	for i in x.size():
+		py = hp * (py + x[i] - px)
+		px = x[i]
+		l += lp * (py - l)
+		y[i] = l
+	# noise floor from the quietest 10 ms blocks, then a soft gate
+	var block := maxi(1, int(rate * 0.01))
+	var levels := []
+	for b in range(0, y.size() - block, block):
+		var e := 0.0
+		for i in range(b, b + block):
+			e = maxf(e, absf(y[i]))
+		levels.append(e)
+	if levels.size() < 4:
+		return y
+	var sorted := levels.duplicate()
+	sorted.sort()
+	var floor_l: float = sorted[int(sorted.size() * 0.1)]
+	var g := 1.0
+	for bi in levels.size():
+		var target := clampf((float(levels[bi]) - floor_l * 1.5) / maxf(floor_l * 3.0, 0.0001), 0.0, 1.0)
+		for i in range(bi * block, (bi + 1) * block):
+			g += (target - g) * (0.02 if target < g else 0.2)
+			y[i] *= g
+	return y
+
+
 static func analyze(samples: PackedFloat32Array, rate: float) -> Dictionary:
 	var peak := 0.0
 	for s in samples:
@@ -39,17 +76,20 @@ static func analyze(samples: PackedFloat32Array, rate: float) -> Dictionary:
 	var rms := sqrt(sum_sq / maxf(1.0, active.size()))
 
 	var freq := estimate_freq(active, rate)
-	var out := PackedFloat32Array()
-	out.resize(active.size())
-	var gain := 0.9 / peak
-	var fade := mini(int(rate * 0.01), active.size() / 2)
-	for i in active.size():
+	var out := clean(active, rate)
+	var opeak := 0.0
+	for v in out:
+		opeak = maxf(opeak, absf(v))
+	# normalise, but never pump quiet room noise up into a hiss
+	var gain := minf(0.85 / maxf(opeak, 0.0001), 8.0)
+	var fade := mini(int(rate * 0.025), out.size() / 2)
+	for i in out.size():
 		var env := 1.0
 		if i < fade:
 			env = float(i) / fade
-		elif i > active.size() - fade:
-			env = float(active.size() - i) / fade
-		out[i] = active[i] * gain * env
+		elif i > out.size() - fade:
+			env = float(out.size() - i) / fade
+		out[i] = out[i] * gain * env
 
 	return {
 		"samples": out,
