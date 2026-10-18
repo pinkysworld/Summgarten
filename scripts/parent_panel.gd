@@ -15,7 +15,7 @@ static var _fails := 0
 static var _locked_until := 0
 const LOCK_MS := 60000
 const REVIEW_URL := "https://apps.apple.com/app/id6824160993?action=write-review"
-const PRIVACY_URL := "https://minh.systems/Klanggarten/privacy.html"
+const PRIVACY_URL := "https://minh.systems/Summgarten/privacy.html"
 
 
 const INK := Color("2f2a4a")
@@ -440,7 +440,7 @@ func _show_settings() -> void:
 		rate.reparent(links)
 		rate.pressed.connect(func(): OS.shell_open(REVIEW_URL))
 	_primary(_button(tr("BACK"), queue_free))
-	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)
+	_label("Summgarten %s" % ProjectSettings.get_setting("application/config/version"), 12)
 
 
 func _show_credits() -> void:

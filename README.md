@@ -1,6 +1,6 @@
-# Klanggarten 2.0.0
+# Summgarten 2.0.0
 
-Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen und Wesen wachsen, die den Klang pentatonisch korrigiert im Takt vorsingen. Konzept: [Klanggarten – Spielkonzept.md](Klanggarten%20–%20Spielkonzept.md).
+Kinderspiel (3–6 Jahre) in Godot 4.7: Die Stimme des Kindes lässt Pflanzen und Wesen wachsen, die den Klang pentatonisch korrigiert im Takt vorsingen. Konzept: [Summgarten – Spielkonzept.md](Summgarten%20–%20Spielkonzept.md).
 
 ## Umfang v1
 - 1 Garten mit 8 Beeten, Samen antippen → 2,5 s Aufnahme → Wesen wächst
@@ -50,7 +50,7 @@ for p in macOS Windows Linux; do "/Applications/Godot 4.7.app/Contents/MacOS/God
 Ergebnisse in `build/` (macOS universal, ad-hoc signiert, mit Mikrofon-Berechtigungstext; Windows x86_64; Linux/Steam Deck x86_64).
 
 ## macOS signieren und notarisieren
-`bash tools/release_macos.sh` → `build/macos-signed/Klanggarten-macOS.zip` (Developer ID, Hardened Runtime, notarisiert, Ticket angeheftet).
+`bash tools/release_macos.sh` → `build/macos-signed/Summgarten-macOS.zip` (Developer ID, Hardened Runtime, notarisiert, Ticket angeheftet).
 
 ## Offen vor Steam-Veröffentlichung
 - Windows: Icon/Metadaten per rcedit, optional Code-Signatur

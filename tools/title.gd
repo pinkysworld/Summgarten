@@ -1,11 +1,11 @@
 extends Control
-## Playful "Klanggarten" lettering for key art: each letter in a garden colour,
+## Playful "Summgarten" lettering for key art: each letter in a garden colour,
 ## slightly tilted and bouncing, with a thick ink outline and a soft drop shadow.
 
 const COLORS := [Color("ff7a6b"), Color("ffc93c"), Color("7cc86a"), Color("4cc3b5"), Color("6fa8e8"), Color("9b6bd6"), Color("ff8fb8")]
 const INK := Color("2f2a4a")
 
-var text := "Klanggarten"
+var text := "Summgarten"
 var size_px := 120
 var font: Font
 

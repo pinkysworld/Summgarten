@@ -3,7 +3,7 @@ config_version=5
 
 [application]
 
-config/name="Klanggarten"
+config/name="Summgarten"
 config/description="Dein Kind komponiert mit seiner eigenen Stimme."
 config/version="2.0.0"
 run/main_scene="res://scenes/main.tscn"

@@ -10,7 +10,7 @@
 - **Offline**, kein Launcher, keine Konten. Pausieren und Fortsetzen ist unkritisch, der Garten wird nach jeder Änderung gespeichert.
 
 ## In Steamworks einstellen
-1. Depot „Linux“ mit `build/linux/Klanggarten.x86_64` (Startoption: diese Datei, Betriebssystem Linux + SteamOS).
+1. Depot „Linux“ mit `build/linux/Summgarten.x86_64` (Startoption: diese Datei, Betriebssystem Linux + SteamOS).
 2. **Steam Input:** Als Standard-Controllerkonfiguration „Gamepad“ wählen. Für den Touchscreen „Touchscreen als Maus“ aktiv lassen.
 3. **Deck-Kompatibilität** unter „Steam Deck Compatibility Review“ anfordern. Angaben dazu:
    - Controller: volle Unterstützung

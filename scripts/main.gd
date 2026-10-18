@@ -865,7 +865,7 @@ func export_concert() -> String:
 	var dir := OS.get_system_dir(OS.SYSTEM_DIR_DOCUMENTS)
 	if dir.is_empty():
 		dir = OS.get_user_data_dir()
-	var path := dir.path_join("Klanggarten-Konzert-%s.wav" % stamp)
+	var path := dir.path_join("Summgarten-Konzert-%s.wav" % stamp)
 	var err := SoundLab.make_wav(mix, rate).save_to_wav(path)
 	return path if err == OK else ""
 
