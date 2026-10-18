@@ -14,6 +14,7 @@ var _answer := 0
 static var _fails := 0
 static var _locked_until := 0
 const LOCK_MS := 60000
+const REVIEW_URL := "https://apps.apple.com/app/id6824160993?action=write-review"
 const PRIVACY_URL := "https://minh.systems/Klanggarten/privacy.html"
 
 
@@ -111,10 +112,17 @@ func _ready() -> void:
 	style.shadow_color = Color(0, 0, 0, 0.3)
 	style.shadow_size = 10
 	style.shadow_offset = Vector2(0, 6)
-	style.set_content_margin_all(22)
+	style.set_content_margin_all(16)
 	panel.add_theme_stylebox_override("panel", style)
 	panel.theme = _make_theme()
 	center.add_child(panel)
+	# Small landscape screens (iPhone): shrink the whole card instead of cutting it off.
+	panel.resized.connect(func():
+		var avail := get_viewport().get_visible_rect().size.y - 12.0
+		var k := minf(1.0, avail / maxf(panel.size.y, 1.0))
+		# the container resets its child's scale, so scale the container itself
+		center.pivot_offset = center.size / 2.0
+		center.scale = Vector2(k, k))
 	# same paper and brush treatment as the garden
 	var paper := ColorRect.new()
 	paper.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -125,7 +133,7 @@ func _ready() -> void:
 	paper.material = mat
 	add_child.call_deferred(paper)
 	_box = VBoxContainer.new()
-	_box.add_theme_constant_override("separation", 8)
+	_box.add_theme_constant_override("separation", 6)
 	panel.add_child(_box)
 	_show_gate()
 
@@ -320,6 +328,7 @@ func _show_settings() -> void:
 	_box.add_child(row)
 
 	# Play time and concert
+	_box = outer
 	_box = _card()
 	_label(tr("SLEEP_AFTER"), 17)
 	var chips := HBoxContainer.new()
@@ -360,6 +369,7 @@ func _show_settings() -> void:
 			OS.shell_open(ProjectSettings.globalize_path("user://postcards")))
 
 	# Language and season
+	_box = outer
 	_box = _card()
 	var lang_row := HBoxContainer.new()
 	lang_row.add_theme_constant_override("separation", 10)
@@ -424,6 +434,11 @@ func _show_settings() -> void:
 	var cr := _link(tr("CREDITS"))
 	cr.reparent(links)
 	cr.pressed.connect(_show_credits)
+	# Behind the gate, so the Kids-category rule on leaving the app holds.
+	if OS.get_name() == "iOS":
+		var rate := _link(tr("RATE"))
+		rate.reparent(links)
+		rate.pressed.connect(func(): OS.shell_open(REVIEW_URL))
 	_primary(_button(tr("BACK"), queue_free))
 	_label("Klanggarten %s" % ProjectSettings.get_setting("application/config/version"), 12)
 
@@ -431,15 +446,18 @@ func _show_settings() -> void:
 func _show_credits() -> void:
 	_clear()
 	_label(tr("CREDITS"), 28)
+	var outer := _box
 	_box = _card()
 	_label(tr("CR_GAME"), 15)
 	_label("Michel Nguyen · Minh Nguyen Studios", 21)
 	_label(tr("CR_TEST"), 15)
 	_label("♥", 21)
+	_box = outer
 	_box = _card()
 	_label(tr("CR_TECH"), 15)
 	_label("Godot Engine – godotengine.org\nMIT License, © Godot Engine contributors, Juan Linietsky, Ariel Manzur", 14)
 	_label("Noto Sans – SIL Open Font License 1.1, © Google LLC", 14)
+	_box = outer
 	_label(tr("CR_THANKS"), 19)
 	var priv := _link(PRIVACY_URL.trim_prefix("https://"))
 	priv.pressed.connect(func(): OS.shell_open(PRIVACY_URL))
