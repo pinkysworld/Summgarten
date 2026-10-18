@@ -41,13 +41,60 @@ static func clean(x: PackedFloat32Array, rate: float) -> PackedFloat32Array:
 	var sorted := levels.duplicate()
 	sorted.sort()
 	var floor_l: float = sorted[int(sorted.size() * 0.1)]
+	# Per-sample gain smoothing: a fast-chattering gate on a voice sounds gritty,
+	# so it opens in ~5 ms and closes over ~80 ms.
+	var att := 1.0 / (rate * 0.005)
+	var rel := 1.0 / (rate * 0.08)
 	var g := 1.0
 	for bi in levels.size():
-		var target := clampf((float(levels[bi]) - floor_l * 1.5) / maxf(floor_l * 3.0, 0.0001), 0.0, 1.0)
+		var target := clampf((float(levels[bi]) - floor_l * 1.3) / maxf(floor_l * 3.0, 0.0001), 0.0, 1.0)
+		target = 0.15 + 0.85 * target # duck noise, never cut to hard silence
 		for i in range(bi * block, (bi + 1) * block):
-			g += (target - g) * (0.02 if target < g else 0.2)
+			g += (target - g) * (att if target > g else rel)
 			y[i] *= g
 	return y
+
+
+## Close to the phone a loud child hits full scale: the flat-topped runs are
+## rebuilt with a smooth curve through their neighbours instead of the harsh edge.
+static func declip(x: PackedFloat32Array, peak: float) -> PackedFloat32Array:
+	if peak < 0.95:
+		return x
+	var y := x.duplicate()
+	var lim := peak * 0.97
+	var i := 1
+	while i < y.size() - 1:
+		if absf(y[i]) < lim:
+			i += 1
+			continue
+		var a := i - 1
+		var b := i
+		while b < y.size() - 1 and absf(y[b]) >= lim:
+			b += 1
+		var n := b - a
+		if n > 1:
+			var sgn := signf(y[i])
+			var lift := lim * (0.12 + 0.02 * minf(n, 20))
+			for k in range(1, n):
+				var u := float(k) / n
+				y[a + k] = lerpf(y[a], y[b], u) + sgn * lift * sin(u * PI)
+		i = b
+	# the rebuilt peaks can exceed 1.0; scale back into range
+	var m := 0.0
+	for v in y:
+		m = maxf(m, absf(v))
+	if m > 1.0:
+		for k in y.size():
+			y[k] /= m
+	return y
+
+
+## Gentle saturation above 0.5 instead of a hard edge at 1.0.
+static func soft_clip(v: float) -> float:
+	var a := absf(v)
+	if a <= 0.5:
+		return v
+	return signf(v) * (0.5 + 0.5 * tanh((a - 0.5) * 2.0))
 
 
 static func analyze(samples: PackedFloat32Array, rate: float) -> Dictionary:
@@ -76,12 +123,13 @@ static func analyze(samples: PackedFloat32Array, rate: float) -> Dictionary:
 	var rms := sqrt(sum_sq / maxf(1.0, active.size()))
 
 	var freq := estimate_freq(active, rate)
-	var out := clean(active, rate)
+	var out := clean(declip(active, peak), rate)
 	var opeak := 0.0
 	for v in out:
 		opeak = maxf(opeak, absf(v))
-	# normalise, but never pump quiet room noise up into a hiss
-	var gain := minf(0.85 / maxf(opeak, 0.0001), 8.0)
+	# normalise with headroom (several beings sing at once), and never pump
+	# quiet room noise up into a hiss
+	var gain := minf(0.6 / maxf(opeak, 0.0001), 4.0)
 	var fade := mini(int(rate * 0.025), out.size() / 2)
 	for i in out.size():
 		var env := 1.0
@@ -89,7 +137,7 @@ static func analyze(samples: PackedFloat32Array, rate: float) -> Dictionary:
 			env = float(i) / fade
 		elif i > out.size() - fade:
 			env = float(out.size() - i) / fade
-		out[i] = out[i] * gain * env
+		out[i] = soft_clip(out[i] * gain * env)
 
 	return {
 		"samples": out,

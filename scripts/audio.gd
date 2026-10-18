@@ -76,6 +76,7 @@ func _ready() -> void:
 	for i in VOICES:
 		var p := AudioStreamPlayer.new()
 		p.bus = "Garden"
+		p.volume_db = -3.0 # headroom: several voices often overlap
 		add_child(p)
 		_players.append(p)
 
