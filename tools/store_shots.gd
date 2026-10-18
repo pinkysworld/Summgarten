@@ -152,6 +152,7 @@ func _shots() -> void:
 	var row := HBoxContainer.new()
 	row.set_anchors_preset(Control.PRESET_CENTER)
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.layout_direction = Control.LAYOUT_DIRECTION_LTR # RTL locales would push the row off screen
 	row.add_theme_constant_override("separation", 40)
 	_layer.add_child(row)
 	var badges := [["BADGE_OFFLINE", Color("4cc3b5")], ["BADGE_NOADS", Color("ff7a6b")], ["BADGE_PRIVATE", Color("6fa8e8")]]
@@ -176,7 +177,10 @@ func _shots() -> void:
 		l.add_theme_color_override("font_color", Color("2f2a4a"))
 		var sf := SystemFont.new()
 		sf.font_names = PackedStringArray(["Arial Rounded MT Bold", "Arial"])
-		sf.fallbacks = [load("res://fonts/NotoSansSC-Bold-subset.otf"), load("res://fonts/NotoSansJP-Bold-subset.otf")]
+		sf.fallbacks = [load("res://fonts/NotoSansSC-Bold-subset.otf"), load("res://fonts/NotoSansJP-Bold-subset.otf"),
+			load("res://fonts/NotoSansKR-Bold-subset.otf"), load("res://fonts/NotoSansTC-Bold-subset.otf"),
+			load("res://fonts/NotoSansArabic-Bold.ttf"), load("res://fonts/NotoSansHebrew-Bold.ttf"),
+			load("res://fonts/NotoSansThai-Bold.ttf"), load("res://fonts/NotoSansDevanagari-Bold.ttf")]
 		l.add_theme_font_override("font", sf)
 		card.add_child(l)
 		row.add_child(card)
