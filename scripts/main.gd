@@ -164,6 +164,12 @@ func _ready() -> void:
 	_cricket = SoundLab.make_wav(SoundLab.ambient(1), 22050)
 	_yawn = SoundLab.make_wav(SoundLab.ambient(3), 22050)
 	_plop = SoundLab.make_wav(SoundLab.instrument(2, 520.0), 22050)
+	var turn := CanvasLayer.new()
+	turn.layer = 90
+	var hint := Control.new()
+	hint.set_script(load("res://scripts/rotate_hint.gd"))
+	turn.add_child(hint)
+	add_child(turn)
 	var paper := CanvasLayer.new()
 	paper.layer = 5
 	var rect := ColorRect.new()

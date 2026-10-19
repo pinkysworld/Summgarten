@@ -100,8 +100,12 @@ func stop_recording() -> PackedFloat32Array:
 	_drain()
 	recording = false
 	level = 0.0
-	if _buffer.is_empty():
-		# the stream delivered nothing (iOS can drop it after playback): restart it next time
+	var peak := 0.0
+	for v in _buffer:
+		peak = maxf(peak, absf(v))
+	if peak < 0.001:
+		# the stream delivered nothing or dead silence (iPad can drop the input
+		# after playback or a route change): restart it next time
 		_mic_player.stop()
 	return _buffer
 

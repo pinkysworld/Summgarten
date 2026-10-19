@@ -55,6 +55,41 @@ static func clean(x: PackedFloat32Array, rate: float) -> PackedFloat32Array:
 	return y
 
 
+## When the microphone delivers late (iPad), the engine fills the gap with exact
+## zeros. Those holes click hard after normalising, so they are cut out and the
+## two sides are joined with a short crossfade.
+static func remove_dropouts(x: PackedFloat32Array) -> PackedFloat32Array:
+	const MIN_RUN := 4
+	const XF := 16
+	var out := PackedFloat32Array()
+	var i := 0
+	var n := x.size()
+	while i < n:
+		if x[i] == 0.0:
+			var j := i
+			while j < n and x[j] == 0.0:
+				j += 1
+			if j - i >= MIN_RUN and i > 0 and j < n:
+				# join: fade the tail of what we have into the samples after the hole
+				var m := mini(XF, mini(out.size(), n - j))
+				for k in m:
+					var a := float(k + 1) / float(m + 1)
+					var idx := out.size() - m + k
+					out[idx] = out[idx] * (1.0 - a) + x[j + k] * a
+				i = j + m
+				continue
+			if j - i >= MIN_RUN:
+				i = j # leading or trailing silence from the engine
+				continue
+			for k in range(i, j):
+				out.append(0.0)
+			i = j
+			continue
+		out.append(x[i])
+		i += 1
+	return out
+
+
 ## Close to the phone a loud child hits full scale: the flat-topped runs are
 ## rebuilt with a smooth curve through their neighbours instead of the harsh edge.
 static func declip(x: PackedFloat32Array, peak: float) -> PackedFloat32Array:
@@ -98,6 +133,7 @@ static func soft_clip(v: float) -> float:
 
 
 static func analyze(samples: PackedFloat32Array, rate: float) -> Dictionary:
+	samples = remove_dropouts(samples)
 	var peak := 0.0
 	for s in samples:
 		peak = maxf(peak, absf(s))
