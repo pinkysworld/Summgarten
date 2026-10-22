@@ -37,7 +37,7 @@ footer a{color:var(--muted);margin:0 8px}
 [data-l]{display:none}
 html[lang=de] [data-l=de],html[lang=en] [data-l=en]{display:revert}
 .studio{display:flex;width:max-content;margin:0 auto 18px !important;flex-direction:column;align-items:center;gap:6px;text-decoration:none;color:var(--muted);margin-bottom:14px}
-.studio img{width:340px;max-width:85vw;height:auto;display:block}
+.studio img{width:300px;max-width:85vw;height:auto;display:block}
 .gallery{display:flex;gap:18px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:14px}
 .gallery .shot{flex:0 0 min(86%,760px);scroll-snap-align:center;border-width:4px;border-radius:20px}
 video.shot{background:#000}
