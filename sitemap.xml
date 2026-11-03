@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
 <url><loc>https://minh.systems/Summgarten/</loc></url>
 <url><loc>https://minh.systems/Summgarten/en/</loc></url>
 <url><loc>https://minh.systems/Summgarten/musik-app-fuer-kinder/</loc></url>
 <url><loc>https://minh.systems/Summgarten/en/music-app-for-kids/</loc></url>
 <url><loc>https://minh.systems/Summgarten/privacy.html</loc></url>
 <url><loc>https://minh.systems/Summgarten/support.html</loc></url>
+<url><loc>https://minh.systems/Summgarten/musik-spiel-fuer-kinder-ohne-werbung/</loc><lastmod>2026-11-03</lastmod><xhtml:link rel="alternate" hreflang="de" href="https://minh.systems/Summgarten/musik-spiel-fuer-kinder-ohne-werbung/"/><xhtml:link rel="alternate" hreflang="en" href="https://minh.systems/Summgarten/en/ad-free-music-game-for-kids/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://minh.systems/Summgarten/musik-spiel-fuer-kinder-ohne-werbung/"/></url>
+<url><loc>https://minh.systems/Summgarten/en/ad-free-music-game-for-kids/</loc><lastmod>2026-11-03</lastmod><xhtml:link rel="alternate" hreflang="de" href="https://minh.systems/Summgarten/musik-spiel-fuer-kinder-ohne-werbung/"/><xhtml:link rel="alternate" hreflang="en" href="https://minh.systems/Summgarten/en/ad-free-music-game-for-kids/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://minh.systems/Summgarten/musik-spiel-fuer-kinder-ohne-werbung/"/></url>
+<url><loc>https://minh.systems/Summgarten/kinder-zum-singen-bringen/</loc><lastmod>2026-11-03</lastmod><xhtml:link rel="alternate" hreflang="de" href="https://minh.systems/Summgarten/kinder-zum-singen-bringen/"/><xhtml:link rel="alternate" hreflang="en" href="https://minh.systems/Summgarten/en/get-kids-to-sing/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://minh.systems/Summgarten/kinder-zum-singen-bringen/"/></url>
+<url><loc>https://minh.systems/Summgarten/en/get-kids-to-sing/</loc><lastmod>2026-11-03</lastmod><xhtml:link rel="alternate" hreflang="de" href="https://minh.systems/Summgarten/kinder-zum-singen-bringen/"/><xhtml:link rel="alternate" hreflang="en" href="https://minh.systems/Summgarten/en/get-kids-to-sing/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://minh.systems/Summgarten/kinder-zum-singen-bringen/"/></url>
+<url><loc>https://minh.systems/Summgarten/nachsingen-spiel-fuer-kinder/</loc><lastmod>2026-11-03</lastmod><xhtml:link rel="alternate" hreflang="de" href="https://minh.systems/Summgarten/nachsingen-spiel-fuer-kinder/"/><xhtml:link rel="alternate" hreflang="en" href="https://minh.systems/Summgarten/en/echo-singing-game-for-kids/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://minh.systems/Summgarten/nachsingen-spiel-fuer-kinder/"/></url>
+<url><loc>https://minh.systems/Summgarten/en/echo-singing-game-for-kids/</loc><lastmod>2026-11-03</lastmod><xhtml:link rel="alternate" hreflang="de" href="https://minh.systems/Summgarten/nachsingen-spiel-fuer-kinder/"/><xhtml:link rel="alternate" hreflang="en" href="https://minh.systems/Summgarten/en/echo-singing-game-for-kids/"/><xhtml:link rel="alternate" hreflang="x-default" href="https://minh.systems/Summgarten/nachsingen-spiel-fuer-kinder/"/></url>
 </urlset>
